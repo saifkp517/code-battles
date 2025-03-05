@@ -1,50 +1,71 @@
 'use client'
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { v4 as uuidv4 } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import Editor from '@monaco-editor/react';
-
+import { io } from 'socket.io-client';
 import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle } from 'lucide-react';
 
+
+const socket = io('http://localhost:4000');
+
 const CodeBattleArena = () => {
+
+
+
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
   const [player1Status, setPlayer1Status] = useState('coding');
+  const [roomId, setRoomId] = useState('');
   const [player2Status, setPlayer2Status] = useState('coding');
   const [showProblem, setShowProblem] = useState(true);
+  const [socketId, setSocketId] = useState('');
 
-  const [code, setCode] = useState(`function maxSubArray(nums) {
-    if (!nums || nums.length === 0) {
-      return { sum: 0, subarray: [] };
-    }
+  const [code, setMyCode] = useState('');
+  const [opponentCode, setOpponentCode] = useState('');
 
-    let maxSum = nums[0];
-    let currentSum = nums[0];
-    let start = 0;
-    let tempStart = 0;
-    let end = 0;
 
-    for (let i = 1; i < nums.length; i++) {
-      if (currentSum < 0) {
-        currentSum = nums[i];
-        tempStart = i;
-      } else {
-        currentSum += nums[i];
-      }
+  useEffect(() => {
 
-      if (currentSum > maxSum) {
-        maxSum = currentSum;
-        start = tempStart;
-        end = i;
-      }
-    }
-
-    return {
-      sum: maxSum,
-      subarray: nums.slice(start, end + 1),
+    const handleConnect = () => {
+      setSocketId(socket.id || "");
+      socket.emit('joinRoom');
     };
-  }`);
+
+    const handleOpponentCode = ({ code, from }: any) => {
+      if (from === socket.id) {
+        setMyCode(code); // It's your code
+      } else {
+        setOpponentCode(code); // It's opponent's code
+      }
+    };
+
+    if (socket.connected) {
+      handleConnect(); // Handle immediately if already connected
+    }
+
+    socket.on('connect', handleConnect);
+    socket.on('opponentCode', handleOpponentCode);
+
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('opponentCode', handleOpponentCode);
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    socket.on('roomAssigned', ({ roomId }) => {
+      console.log('Assigned to room:', roomId);
+      setRoomId(roomId);
+    });
+
+    return () => {
+      socket.off('roomAssigned');
+    };
+  }, []);
+
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -60,6 +81,11 @@ const CodeBattleArena = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const handleCodeChange = (newCode: string | undefined) => {
+    setMyCode(newCode || "");
+    socket.emit('codeUpdate', { roomId: roomId, code: newCode })
+  }
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -67,7 +93,7 @@ const CodeBattleArena = () => {
   };
 
   const getStatusColor = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'submitted': return 'text-yellow-500';
       case 'passed': return 'text-green-500';
       case 'failed': return 'text-red-500';
@@ -76,7 +102,7 @@ const CodeBattleArena = () => {
   };
 
   const getStatusIcon = (status: string) => {
-    switch(status) {
+    switch (status) {
       case 'submitted': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       case 'passed': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'failed': return <X className="w-4 h-4 text-red-500" />;
@@ -91,17 +117,17 @@ const CodeBattleArena = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Crown className="w-6 h-6 text-yellow-500" />
-            <h1 className="text-xl font-bold text-white">Code Battle Arena</h1>
+            <h1 className="text-xl font-bold text-white">Code Battle Arena RoomID: {roomId}</h1>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-slate-400" />
               <span className="text-xl font-mono font-bold text-white">{formatTime(timeLeft)}</span>
             </div>
-            
-            <Button 
-              variant="outline" 
+
+            <Button
+              variant="outline"
               size="sm"
               onClick={() => setShowProblem(!showProblem)}
             >
@@ -116,7 +142,7 @@ const CodeBattleArena = () => {
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Problem Statement Section */}
         {showProblem && (
-          <div className="w-full md:w-1/3 p-4 border-r border-slate-800 bg-slate-900 overflow-y-auto">
+          <div className="w-full md:w-1/4 p-4 border-r border-slate-800 bg-slate-900 overflow-y-auto">
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader>
                 <CardTitle className="text-white">Problem: Array Sum Optimization</CardTitle>
@@ -174,18 +200,18 @@ Subarray: [4, -1, 2, 1]`}
                   <Button variant="secondary" size="sm">Submit</Button>
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
-          <Editor
-            height="100%"
-            language="javascript"
-            theme="vs-dark"
-            value={code}
-            onChange={(newValue: string | undefined) => {
-                setCode(newValue || "");
-            }}
-            
-            // options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
-          />
-        </div>
+                  <Editor
+                    height="100%"
+                    language="javascript"
+                    theme="vs-dark"
+                    value={code}
+                    onChange={(newValue: string | undefined) => {
+                      handleCodeChange(newValue)
+                    }}
+
+                  // options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                  />
+                </div>
               </div>
 
               {/* Player 2 Code Editor */}
@@ -204,31 +230,7 @@ Subarray: [4, -1, 2, 1]`}
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
-{`def max_subarray(nums):
-    if not nums:
-        return {"sum": 0, "subarray": []}
-    
-    max_sum = current_sum = nums[0]
-    start = temp_start = end = 0
-    
-    for i in range(1, len(nums)):
-        # Reset current sum if it becomes negative
-        if current_sum < 0:
-            current_sum = nums[i]
-            temp_start = i
-        else:
-            current_sum += nums[i]
-        
-        # Update max sum when we find larger sum
-        if current_sum > max_sum:
-            max_sum = current_sum
-            start = temp_start
-            end = i
-    
-    return {
-        "sum": max_sum,
-        "subarray": nums[start:end+1]
-    }`}
+                    {`${opponentCode}`}
                   </pre>
                 </div>
               </div>
@@ -249,42 +251,19 @@ Subarray: [4, -1, 2, 1]`}
                   </div>
                   <Button variant="secondary" size="sm">Submit</Button>
                 </div>
+
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
-                  <pre className="whitespace-pre">
-{`function maxSubArray(nums) {
-  if (!nums || nums.length === 0) {
-    return { sum: 0, subarray: [] };
-  }
-  
-  let maxSum = nums[0];
-  let currentSum = nums[0];
-  let start = 0;
-  let tempStart = 0;
-  let end = 0;
-  
-  for (let i = 1; i < nums.length; i++) {
-    // If current_sum becomes negative, reset it
-    if (currentSum < 0) {
-      currentSum = nums[i];
-      tempStart = i;
-    } else {
-      currentSum += nums[i];
-    }
-    
-    // Update maxSum if we found a new maximum
-    if (currentSum > maxSum) {
-      maxSum = currentSum;
-      start = tempStart;
-      end = i;
-    }
-  }
-  
-  return {
-    sum: maxSum,
-    subarray: nums.slice(start, end + 1)
-  };
-}`}
-                  </pre>
+                  <Editor
+                    height="100%"
+                    language="javascript"
+                    theme="vs-dark"
+                    value={code}
+                    onChange={(newValue: string | undefined) => {
+                      handleCodeChange(newValue)
+                    }}
+
+                  // options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                  />
                 </div>
               </div>
             </TabsContent>
@@ -306,31 +285,7 @@ Subarray: [4, -1, 2, 1]`}
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
-{`def max_subarray(nums):
-    if not nums:
-        return {"sum": 0, "subarray": []}
-    
-    max_sum = current_sum = nums[0]
-    start = temp_start = end = 0
-    
-    for i in range(1, len(nums)):
-        # Reset current sum if it becomes negative
-        if current_sum < 0:
-            current_sum = nums[i]
-            temp_start = i
-        else:
-            current_sum += nums[i]
-        
-        # Update max sum when we find larger sum
-        if current_sum > max_sum:
-            max_sum = current_sum
-            start = temp_start
-            end = i
-    
-    return {
-        "sum": max_sum,
-        "subarray": nums[start:end+1]
-    }`}
+                    {`${opponentCode}`}
                   </pre>
                 </div>
               </div>

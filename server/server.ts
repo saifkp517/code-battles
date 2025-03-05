@@ -1,6 +1,7 @@
 import express from "express";
-import {Server} from "socket.io"
-import {createServer} from "http"
+import { Server } from "socket.io"
+import { createServer } from "http"
+import { v4 as uuidv4 } from "uuid"
 import cors from "cors"
 
 const app = express();
@@ -11,43 +12,85 @@ const io = new Server(httpServer, {
     }
 })
 
+type Player = {
+    socketId: string,
+    userId: string
+}
+
 type Room = {
-    players: string[],
-    code: string  
+    players: Player[],
+    // code: string
 };
 
 type ActiveRooms = {
     [key: string]: Room
 };
 
+
+
 const activeRooms: ActiveRooms = {};
 
 io.on('connection', (socket) => {
-    console.log("A user has Connected!: ", socket.id);
 
-    socket.on('joinRoom', (roomId: string) => {
-        console.log(`User ${socket.id} joined room: ${roomId}`);
-        if(!activeRooms[roomId]) activeRooms[roomId] = {players: [], code: 'QWKO@!M'};
+    socket.on('joinRoom', () => {
+        console.log('user has joined room')
+        const roomId = findOrCreateRoom(socket.id);
+        socket.join(roomId);
 
-        activeRooms[roomId].players.push(socket.id);
+        const players = activeRooms[roomId].players;
+        console.log(players)
+        socket.emit('roomAssigned', { roomId });
 
-        socket.emit('syncCode', activeRooms[roomId].code)
+        io.to(roomId).emit('updatePlayers', players);
 
-        if(activeRooms[roomId].players.length == 2) {
-            io.to(roomId).emit('startBattle');
+        if (players.length === 2) {
+            io.to(roomId).emit('startBattle', { roomId, players })
         }
     })
 
     //sync code across both players
-    socket.on('codeUpdate', ({roomId, code}) => {
-        activeRooms[roomId].code = code;
-        socket.to(roomId).emit('syncCode', code);
-    })
+    socket.on('codeUpdate', ({ roomId, code }) => {
+
+        socket.to(roomId).emit('opponentCode', {
+            code,
+            from: socket.id,
+        });
+    });
 
     socket.on('disconnect', () => {
-        console.log(`User ${socket.id} has disconnected!`);
+        removePlayer(socket.id);
     })
 })
+
+function findOrCreateRoom(socketId: string) {
+
+    const openRoom = Object.keys(activeRooms).find((roomId) => activeRooms[roomId].players.length < 2)
+
+    const roomId = openRoom || `room=${Date.now()}`
+
+    if (!activeRooms[roomId]) {
+        activeRooms[roomId] = { players: [] }
+    }
+
+    activeRooms[roomId].players.push({ userId: socketId, socketId: socketId })
+    return roomId;
+}
+
+
+function removePlayer(socketId: string) {
+    for (const roomId in activeRooms) {
+        activeRooms[roomId].players = activeRooms[roomId].players.filter(
+            (player) => player.socketId !== socketId
+        );
+
+        if (activeRooms[roomId].players.length === 0) {
+            delete activeRooms[roomId]; // Cleanup empty rooms
+        }
+    }
+}
+
+
+console.log(activeRooms)
 
 httpServer.listen(4000, () => console.log("Websocket server running on port 4000"))
 

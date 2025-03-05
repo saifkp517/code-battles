@@ -135,7 +135,6 @@ const CodeBattlePlatform = () => {
                       onChange={(e) => {
                         setRoomCode(e.target.value)
                         window.location.href = "/battle"
-                        console.log("test")
                       }}
                       placeholder="Enter room code"
                       className="flex-1"
