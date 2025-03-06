@@ -12,7 +12,7 @@ import { Code, Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'luci
 const CodeBattlePlatform = () => {
   const [activeTab, setActiveTab] = useState('battles');
   const [roomCode, setRoomCode] = useState('');
-
+  
   // Demo data
   const upcomingBattles = [
     { id: 1, name: 'Algorithm Showdown', players: 2, difficulty: 'Medium', startTime: '10:30 AM' },

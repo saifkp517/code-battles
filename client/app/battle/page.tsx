@@ -7,14 +7,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { Badge } from '@/components/ui/badge';
 import Editor from '@monaco-editor/react';
 import { io } from 'socket.io-client';
+import CodeExecutor from '../utils/codeExecutor';
 import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle } from 'lucide-react';
 
 
 const socket = io('http://localhost:4000');
 
 const CodeBattleArena = () => {
-
-
 
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
   const [player1Status, setPlayer1Status] = useState('coding');
@@ -175,7 +174,7 @@ Subarray: [4, -1, 2, 1]`}
 
         {/* Main Coding Area */}
         <div className={`flex-1 flex flex-col ${showProblem ? 'md:w-2/3' : 'w-full'}`}>
-          <Tabs defaultValue="split" className="flex-1 flex flex-col">
+          <Tabs defaultValue="split" className="flex-1 flex flex-col h-screen">
             <div className="bg-slate-900 border-b border-slate-800 px-6 py-2">
               <TabsList className="bg-slate-800">
                 <TabsTrigger value="split">Split View</TabsTrigger>
@@ -197,7 +196,6 @@ Subarray: [4, -1, 2, 1]`}
                       </span>
                     </div>
                   </div>
-                  <Button variant="secondary" size="sm">Submit</Button>
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <Editor
@@ -226,7 +224,7 @@ Subarray: [4, -1, 2, 1]`}
                       </span>
                     </div>
                   </div>
-                  <Button variant="secondary" size="sm">Submit</Button>
+                  
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
@@ -249,7 +247,7 @@ Subarray: [4, -1, 2, 1]`}
                       </span>
                     </div>
                   </div>
-                  <Button variant="secondary" size="sm">Submit</Button>
+                  
                 </div>
 
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
@@ -281,7 +279,6 @@ Subarray: [4, -1, 2, 1]`}
                       </span>
                     </div>
                   </div>
-                  <Button variant="secondary" size="sm">Submit</Button>
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
@@ -294,50 +291,8 @@ Subarray: [4, -1, 2, 1]`}
 
           {/* Results Panel */}
           <div className="bg-slate-900 border-t border-slate-800 p-4">
-            <div className="grid grid-cols-2 gap-4">
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-3">
-                  <CardTitle className="text-sm text-white">Player 1 Results</CardTitle>
-                </CardHeader>
-                <CardContent className="py-3">
-                  <div className="text-sm space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Status:</span>
-                      <span className="text-blue-400">Coding</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Test Cases:</span>
-                      <span className="text-slate-300">0/5 passed</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Execution Time:</span>
-                      <span className="text-slate-300">-</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="bg-slate-800 border-slate-700">
-                <CardHeader className="py-3">
-                  <CardTitle className="text-sm text-white">Player 2 Results</CardTitle>
-                </CardHeader>
-                <CardContent className="py-3">
-                  <div className="text-sm space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Status:</span>
-                      <span className="text-blue-400">Coding</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Test Cases:</span>
-                      <span className="text-slate-300">0/5 passed</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Execution Time:</span>
-                      <span className="text-slate-300">-</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-1 gap-4">
+              <CodeExecutor sourceCode={code} languageId={63}/>
             </div>
           </div>
         </div>
