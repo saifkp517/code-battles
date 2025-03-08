@@ -1,44 +1,218 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { v4 as uuidv4 } from 'uuid';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Editor from '@monaco-editor/react';
 import { io } from 'socket.io-client';
 import CodeExecutor from '../utils/codeExecutor';
-import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle } from 'lucide-react';
-
+import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+// import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSession } from 'next-auth/react';
 
 const socket = io('http://localhost:4000');
 
 const CodeBattleArena = () => {
+  // Sample problem statements - in a real app, these would come from an API
+  const problemStatements = [
+    {
+      id: 'max-subarray',
+      title: 'Maximum Subarray',
+      difficulty: 'Medium',
+      description: `
+        Given an array of integers, find the contiguous subarray with the largest sum and return both the sum and the subarray.
 
+        Input:
+        [-2, 1, -3, 4, -1, 2, 1, -5, 4]
+
+        Expected Output:
+        Sum: 6
+        Subarray: [4, -1, 2, 1]
+
+        Constraints:
+        The array length will be between 1 and 10,000
+        Time complexity must be O(n)
+        Space complexity must be O(1) excluding the output
+
+        Bonus points for clean code and efficient edge case handling.
+      `
+    },
+    {
+      id: 'two-sum',
+      title: 'Two Sum',
+      difficulty: 'Easy',
+      description: `
+        Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.
+        You may assume that each input would have exactly one solution, and you may not use the same element twice.
+
+        Input:
+        nums = [2, 7, 11, 15], target = 9
+
+        Expected Output:
+        [0, 1]
+
+        Constraints:
+        2 <= nums.length <= 10^4
+        -10^9 <= nums[i] <= 10^9
+        -10^9 <= target <= 10^9
+        Only one valid answer exists.
+      `
+    }
+  ];
+
+  // Languages configuration
+  const languages = [
+    { id: 63, name: 'JavaScript', extension: 'js' },
+    { id: 71, name: 'Python', extension: 'py' },
+    { id: 54, name: 'C++', extension: 'cpp' },
+    { id: 62, name: 'Java', extension: 'java' },
+    { id: 78, name: 'Rust', extension: 'rs' },
+  ];
+
+  const { data: session, status } = useSession();
+
+  // State variables
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
-  const [player1Status, setPlayer1Status] = useState('coding');
+  const [yourStatus, setYourStatus] = useState('coding');
   const [roomId, setRoomId] = useState('');
-  const [player2Status, setPlayer2Status] = useState('coding');
+  const [opponentStatus, setOpponentStatus] = useState('coding');
   const [showProblem, setShowProblem] = useState(true);
   const [socketId, setSocketId] = useState('');
-
-  const [code, setMyCode] = useState('');
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [currentProblem, setCurrentProblem] = useState(problemStatements[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState(languages[0]);
+  const [yourCode, setYourCode] = useState('');
   const [opponentCode, setOpponentCode] = useState('');
 
+  const joinedRoom = useRef(false);
+  const messagesEndRef = useRef(null);
 
+  // Generate initial code based on problem and language
+  const generateInitialCode = (problem, language) => {
+    const functionName = generateFunctionName(problem.description);
+    
+    switch(language.name) {
+      case 'JavaScript':
+        return `function ${functionName}(arr) {
+  // Implement your solution here
+  return null;
+}
+
+console.log(${functionName}([-2, 1, -3, 4, -1, 2, 1, -5, 4]));`;
+      
+      case 'Python':
+        return `def ${functionName.toLowerCase()}(arr):
+    # Implement your solution here
+    return None
+
+print(${functionName.toLowerCase()}([-2, 1, -3, 4, -1, 2, 1, -5, 4]))`;
+      
+      case 'C++':
+        return `#include <iostream>
+#include <vector>
+
+using namespace std;
+
+vector<int> ${functionName}(vector<int>& nums) {
+    // Implement your solution here
+    return {};
+}
+
+int main() {
+    vector<int> nums = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+    auto result = ${functionName}(nums);
+    
+    // Print result
+    return 0;
+}`;
+      
+      case 'Java':
+        return `import java.util.*;
+
+public class Solution {
+    public static int[] ${functionName}(int[] nums) {
+        // Implement your solution here
+        return null;
+    }
+    
+    public static void main(String[] args) {
+        int[] nums = {-2, 1, -3, 4, -1, 2, 1, -5, 4};
+        int[] result = ${functionName}(nums);
+        // Print result
+    }
+}`;
+      
+      case 'Rust':
+        return `fn ${functionName.toLowerCase()}(nums: &[i32]) -> Vec<i32> {
+    // Implement your solution here
+    vec![]
+}
+
+fn main() {
+    let nums = vec![-2, 1, -3, 4, -1, 2, 1, -5, 4];
+    let result = ${functionName.toLowerCase()}(&nums);
+    println!("{:?}", result);
+}`;
+      
+      default:
+        return `// Implement your solution here`;
+    }
+  };
+
+  // Utility to generate function name from problem statement
+  const generateFunctionName = (problem) => {
+    const keywords = problem
+      .match(/\b(array|sum|subarray|maximum|find|largest|optimization|contiguous|two|target)\b/gi) || [];
+
+    const functionName = keywords
+      .map((word, index) =>
+        index === 0
+          ? word.toLowerCase()
+          : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      )
+      .join('');
+
+    return functionName || 'customSolution';
+  };
+
+  // Initialize code when problem or language changes
   useEffect(() => {
+    const newCode = generateInitialCode(currentProblem, selectedLanguage);
+    setYourCode(newCode);
+  }, [currentProblem, selectedLanguage]);
+
+  // Socket connection and event handling
+  useEffect(() => {
+    if (!socket || !session?.user?.id || joinedRoom.current) return;
 
     const handleConnect = () => {
       setSocketId(socket.id || "");
-      socket.emit('joinRoom');
+      if (session?.user?.id) {
+        socket.emit('joinRoom', session?.user?.id);
+        joinedRoom.current = true;
+      }
     };
 
-    const handleOpponentCode = ({ code, from }: any) => {
+    const handleOpponentCode = ({ code, from }) => {
       if (from === socket.id) {
-        setMyCode(code); // It's your code
+        setYourCode(code); // It's your code
       } else {
         setOpponentCode(code); // It's opponent's code
       }
+    };
+
+    const handleMessage = ({ message, from, timestamp }) => {
+      setMessages(prev => [
+        ...prev, 
+        { text: message, isFromYou: from === socket.id, timestamp }
+      ]);
     };
 
     if (socket.connected) {
@@ -47,25 +221,26 @@ const CodeBattleArena = () => {
 
     socket.on('connect', handleConnect);
     socket.on('opponentCode', handleOpponentCode);
-
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('opponentCode', handleOpponentCode);
-    };
-  }, [socket]);
-
-  useEffect(() => {
+    socket.on('chatMessage', handleMessage);
     socket.on('roomAssigned', ({ roomId }) => {
       console.log('Assigned to room:', roomId);
       setRoomId(roomId);
     });
 
     return () => {
+      socket.off('connect', handleConnect);
+      socket.off('opponentCode', handleOpponentCode);
+      socket.off('chatMessage', handleMessage);
       socket.off('roomAssigned');
     };
-  }, []);
+  }, [session?.user?.id]);
 
+  // Auto scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
+  // Timer setup
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prevTime => {
@@ -80,18 +255,55 @@ const CodeBattleArena = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const handleCodeChange = (newCode: string | undefined) => {
-    setMyCode(newCode || "");
-    socket.emit('codeUpdate', { roomId: roomId, code: newCode })
-  }
+  // Send code updates to opponent
+  const handleCodeChange = (newCode) => {
+    setYourCode(newCode || "");
+    socket.emit('codeUpdate', { roomId: roomId, code: newCode });
+  };
 
-  const formatTime = (seconds: number) => {
+  // Send chat message
+  const sendMessage = () => {
+    if (newMessage.trim()) {
+      const message = {
+        text: newMessage,
+        roomId: roomId,
+        timestamp: new Date().toISOString()
+      };
+      
+      socket.emit('sendMessage', message);
+      setMessages(prev => [
+        ...prev, 
+        { text: newMessage, isFromYou: true, timestamp: message.timestamp }
+      ]);
+      setNewMessage('');
+    }
+  };
+
+  // Handle problem selection change
+  const handleProblemChange = (problemId) => {
+    const problem = problemStatements.find(p => p.id === problemId);
+    if (problem) {
+      setCurrentProblem(problem);
+    }
+  };
+
+  // Handle language selection change
+  const handleLanguageChange = (languageId) => {
+    const language = languages.find(l => l.id.toString() === languageId);
+    if (language) {
+      setSelectedLanguage(language);
+    }
+  };
+
+  // Format time from seconds to MM:SS
+  const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getStatusColor = (status: string) => {
+  // Get status styling
+  const getStatusColor = (status) => {
     switch (status) {
       case 'submitted': return 'text-yellow-500';
       case 'passed': return 'text-green-500';
@@ -100,13 +312,19 @@ const CodeBattleArena = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const getStatusIcon = (status) => {
     switch (status) {
       case 'submitted': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       case 'passed': return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'failed': return <X className="w-4 h-4 text-red-500" />;
       default: return <Code className="w-4 h-4 text-blue-500" />;
     }
+  };
+
+  // Format chat timestamp
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
@@ -116,10 +334,41 @@ const CodeBattleArena = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Crown className="w-6 h-6 text-yellow-500" />
-            <h1 className="text-xl font-bold text-white">Code Battle Arena RoomID: {roomId}</h1>
+            <h1 className="text-xl font-bold text-white">Code Battle Arena</h1>
+            <span className="text-slate-400 text-sm">Room: {roomId || 'Connecting...'}</span>
           </div>
 
           <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-4">
+              {/* Problem selection */}
+              <Select onValueChange={handleProblemChange} defaultValue={currentProblem.id}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select problem" />
+                </SelectTrigger>
+                <SelectContent>
+                  {problemStatements.map(problem => (
+                    <SelectItem key={problem.id} value={problem.id}>
+                      {problem.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Language selection */}
+              <Select onValueChange={handleLanguageChange} defaultValue={selectedLanguage.id.toString()}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {languages.map(language => (
+                    <SelectItem key={language.id} value={language.id.toString()}>
+                      {language.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-slate-400" />
               <span className="text-xl font-mono font-bold text-white">{formatTime(timeLeft)}</span>
@@ -133,6 +382,61 @@ const CodeBattleArena = () => {
               {showProblem ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
               {showProblem ? "Hide Problem" : "Show Problem"}
             </Button>
+
+            <Dialog open={chatOpen} onOpenChange={setChatOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MessageCircle className="h-5 w-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Chat with Opponent</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col h-[300px]">
+                  <ScrollArea className="flex-1 p-4">
+                    {messages.length === 0 ? (
+                      <div className="text-center text-slate-500 mt-10">
+                        No messages yet. Start the conversation!
+                      </div>
+                    ) : (
+                      messages.map((msg, index) => (
+                        <div 
+                          key={index} 
+                          className={`mb-2 ${msg.isFromYou ? 'text-right' : 'text-left'}`}
+                        >
+                          <div 
+                            className={`inline-block p-2 rounded-lg ${
+                              msg.isFromYou 
+                                ? 'bg-blue-600 text-white' 
+                                : 'bg-slate-700 text-slate-200'
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            {formatMessageTime(msg.timestamp)}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <div ref={messagesEndRef} />
+                  </ScrollArea>
+                  <div className="flex border-t border-slate-700 p-2">
+                    <Input
+                      value={newMessage}
+                      onChange={e => setNewMessage(e.target.value)}
+                      placeholder="Type a message..."
+                      className="flex-1 mr-2"
+                      onKeyDown={e => e.key === 'Enter' && sendMessage()}
+                    />
+                    <Button onClick={sendMessage} size="icon">
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </header>
@@ -144,29 +448,11 @@ const CodeBattleArena = () => {
           <div className="w-full md:w-1/4 p-4 border-r border-slate-800 bg-slate-900 overflow-y-auto">
             <Card className="bg-slate-800 border-slate-700">
               <CardHeader>
-                <CardTitle className="text-white">Problem: Array Sum Optimization</CardTitle>
-                <CardDescription>Difficulty: Medium | Time Complexity Target: O(n)</CardDescription>
+                <CardTitle className="text-white">Problem: {currentProblem.title}</CardTitle>
+                <CardDescription>Difficulty: {currentProblem.difficulty}</CardDescription>
               </CardHeader>
-              <CardContent className="text-slate-300">
-                <p className="mb-4">
-                  Given an array of integers, find the contiguous subarray with the largest sum and return both the sum and the subarray.
-                </p>
-                <h3 className="font-bold mb-2 text-white">Input:</h3>
-                <pre className="bg-slate-900 p-3 rounded mb-4 text-sm overflow-x-auto">
-                  [-2, 1, -3, 4, -1, 2, 1, -5, 4]
-                </pre>
-                <h3 className="font-bold mb-2 text-white">Expected Output:</h3>
-                <pre className="bg-slate-900 p-3 rounded mb-4 text-sm overflow-x-auto">
-                  {`Sum: 6
-Subarray: [4, -1, 2, 1]`}
-                </pre>
-                <h3 className="font-bold mb-2 text-white">Constraints:</h3>
-                <ul className="list-disc list-inside text-sm">
-                  <li className="mb-1">The array length will be between 1 and 10,000</li>
-                  <li className="mb-1">Time complexity must be O(n)</li>
-                  <li className="mb-1">Space complexity must be O(1) excluding the output</li>
-                  <li className="mb-1">Bonus points for clean code and efficient edge case handling</li>
-                </ul>
+              <CardContent className="text-slate-300 whitespace-pre-line">
+                {currentProblem.description}
               </CardContent>
             </Card>
           </div>
@@ -178,111 +464,102 @@ Subarray: [4, -1, 2, 1]`}
             <div className="bg-slate-900 border-b border-slate-800 px-6 py-2">
               <TabsList className="bg-slate-800">
                 <TabsTrigger value="split">Split View</TabsTrigger>
-                <TabsTrigger value="player1">Player 1 Only</TabsTrigger>
-                <TabsTrigger value="player2">Player 2 Only</TabsTrigger>
+                <TabsTrigger value="you">Your Code</TabsTrigger>
+                <TabsTrigger value="opponent">Opponent's Code</TabsTrigger>
               </TabsList>
             </div>
 
             <TabsContent value="split" className="flex-1 flex flex-col md:flex-row m-0 border-0 outline-none">
-              {/* Player 1 Code Editor */}
+              {/* Your Code Editor */}
               <div className="flex-1 border-r border-slate-800 flex flex-col">
                 <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">Player 1</Badge>
+                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
                     <div className="flex items-center">
-                      {getStatusIcon(player1Status)}
-                      <span className={`ml-1 text-sm ${getStatusColor(player1Status)}`}>
-                        {player1Status.charAt(0).toUpperCase() + player1Status.slice(1)}
+                      {getStatusIcon(yourStatus)}
+                      <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
+                        {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
+                <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
                   <Editor
                     height="100%"
-                    language="javascript"
+                    language={"javascript"}
                     theme="vs-dark"
-                    value={code}
-                    onChange={(newValue: string | undefined) => {
-                      handleCodeChange(newValue)
-                    }}
-
-                  // options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                    value={yourCode}
+                    onChange={handleCodeChange}
+                    options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
                   />
                 </div>
               </div>
 
-              {/* Player 2 Code Editor */}
+              {/* Opponent's Code View */}
               <div className="flex-1 flex flex-col">
                 <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Player 2</Badge>
+                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
                     <div className="flex items-center">
-                      {getStatusIcon(player2Status)}
-                      <span className={`ml-1 text-sm ${getStatusColor(player2Status)}`}>
-                        {player2Status.charAt(0).toUpperCase() + player2Status.slice(1)}
+                      {getStatusIcon(opponentStatus)}
+                      <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
+                        {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
                       </span>
                     </div>
                   </div>
-                  
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
-                    {`${opponentCode}`}
+                    {opponentCode || "Opponent hasn't started coding yet..."}
                   </pre>
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="player1" className="flex-1 m-0 border-0 outline-none">
-              {/* Full screen Player 1 */}
+            <TabsContent value="you" className="flex-1 m-0 border-0 outline-none">
+              {/* Full screen Your Code */}
               <div className="flex-1 flex flex-col h-full">
                 <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">Player 1</Badge>
+                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
                     <div className="flex items-center">
-                      {getStatusIcon(player1Status)}
-                      <span className={`ml-1 text-sm ${getStatusColor(player1Status)}`}>
-                        {player1Status.charAt(0).toUpperCase() + player1Status.slice(1)}
+                      {getStatusIcon(yourStatus)}
+                      <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
+                        {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
                       </span>
                     </div>
                   </div>
-                  
                 </div>
-
-                <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
+                <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
                   <Editor
                     height="100%"
-                    language="javascript"
+                    language={selectedLanguage.extension}
                     theme="vs-dark"
-                    value={code}
-                    onChange={(newValue: string | undefined) => {
-                      handleCodeChange(newValue)
-                    }}
-
-                  // options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                    value={yourCode}
+                    onChange={handleCodeChange}
+                    options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
                   />
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value="player2" className="flex-1 m-0 border-0 outline-none">
-              {/* Full screen Player 2 */}
+            <TabsContent value="opponent" className="flex-1 m-0 border-0 outline-none">
+              {/* Full screen Opponent's Code */}
               <div className="flex-1 flex flex-col h-full">
                 <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
                   <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Player 2</Badge>
+                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
                     <div className="flex items-center">
-                      {getStatusIcon(player2Status)}
-                      <span className={`ml-1 text-sm ${getStatusColor(player2Status)}`}>
-                        {player2Status.charAt(0).toUpperCase() + player2Status.slice(1)}
+                      {getStatusIcon(opponentStatus)}
+                      <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
+                        {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
                       </span>
                     </div>
                   </div>
                 </div>
                 <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
                   <pre className="whitespace-pre">
-                    {`${opponentCode}`}
+                    {opponentCode || "Opponent hasn't started coding yet..."}
                   </pre>
                 </div>
               </div>
@@ -292,7 +569,7 @@ Subarray: [4, -1, 2, 1]`}
           {/* Results Panel */}
           <div className="bg-slate-900 border-t border-slate-800 p-4">
             <div className="grid grid-cols-1 gap-4">
-              <CodeExecutor sourceCode={code} languageId={63}/>
+              <CodeExecutor sourceCode={yourCode} languageId={selectedLanguage.id} />
             </div>
           </div>
         </div>

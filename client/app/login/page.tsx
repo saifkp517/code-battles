@@ -23,9 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import { useThemeConfig } from "../theme-provider";
 import { getRadiusClass } from "@/lib/theme-config";
 
+import { SessionProvider } from "next-auth/react"
+import { useSession, signIn, signOut } from "next-auth/react";
+import { redirect } from "next/navigation";
+
 export default function LoginPage() {
+
     const [showPassword, setShowPassword] = useState(false);
-    //   const { theme } = useTheme();
     const { theme: configTheme } = useThemeConfig();
     const [mounted, setMounted] = useState(false);
     const [leaderboardData, setLeaderboardData] = useState([
@@ -34,16 +38,26 @@ export default function LoginPage() {
         { name: "ByteCrusher", wins: 129, rank: 3 },
     ]);
 
+    const { data: session, status } = useSession();
+
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    if (!mounted) return null;
+    if (!mounted) return null; // Ensure consistent hook calls
+
+    if (status === "loading") return <p>Loading....</p>;
+
+    if (session) {
+        redirect("/");
+        return null;
+    }
 
     const radiusClass = getRadiusClass(configTheme.borderRadius);
 
     return (
         <div className="flex min-h-screen bg-background text-foreground transition-colors overflow-hidden relative">
+
             {/* Animated Code Background */}
             <div className="absolute inset-0 opacity-10 pointer-events-none overflow-hidden">
                 <div className="animate-scroll-slow font-mono text-xs opacity-50 text-primary">
@@ -100,8 +114,8 @@ export default function LoginPage() {
                                     <div key={index} className="flex items-center justify-between p-2 bg-muted/30 rounded">
                                         <div className="flex items-center">
                                             <span className={`w-6 h-6 flex items-center justify-center mr-2 ${index === 0 ? "bg-yellow-500/20 text-yellow-500" :
-                                                    index === 1 ? "bg-slate-300/20 text-slate-300" :
-                                                        "bg-amber-700/20 text-amber-700"
+                                                index === 1 ? "bg-slate-300/20 text-slate-300" :
+                                                    "bg-amber-700/20 text-amber-700"
                                                 } rounded-full font-bold`}>
                                                 {player.rank}
                                             </span>
@@ -133,7 +147,7 @@ export default function LoginPage() {
 
             {/* Right Side (Login Form) */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 ">
-                <Card className={`w-full max-w-md border-gray-300 shadow-lg relative ${radiusClass} overflow-hidden bg-gray-100`}>
+                <Card className={`w-full max-w-md border-gray-300 shadow-lg relative ${radiusClass} overflow-hidden bg-white`}>
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-400"></div>
 
                     <CardHeader className="space-y-1">
@@ -184,7 +198,7 @@ export default function LoginPage() {
                         </div>
 
                         {/* Sign In Button */}
-                        <Button type="submit" className="w-full relative overflow-hidden bg-orange-600 text-white hover:bg-orange-500">
+                        <Button onClick={() => signIn()} type="submit" className="w-full relative overflow-hidden bg-orange-600 text-white hover:bg-orange-500">
                             <span className="relative z-10">Enter Arena</span>
                         </Button>
 
@@ -194,13 +208,13 @@ export default function LoginPage() {
                                 <Separator className="w-full" />
                             </div>
                             <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-gray-100 px-2 text-gray-500">Or continue with</span>
+                                <span className="bg-white px-2 text-gray-500">Or continue with</span>
                             </div>
                         </div>
 
                         {/* Social Login Buttons */}
                         <div className="grid grid-cols-2 gap-4">
-                            <Button variant="outline" type="button" className="w-full border-gray-300 text-gray-500 cursor-pointer">
+                            <Button onClick={() => signIn("google", { callbackUrl: "/" })} variant="outline" type="button" className="w-full border-gray-300 text-gray-500 cursor-pointer">
                                 <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
                                     <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
                                     <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />
@@ -225,7 +239,6 @@ export default function LoginPage() {
                     </CardFooter>
                 </Card>
             </div>
-
         </div>
     );
 }

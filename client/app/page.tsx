@@ -7,7 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Code, Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
+import { Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+
 
 const CodeBattlePlatform = () => {
   const [activeTab, setActiveTab] = useState('battles');
@@ -84,23 +86,7 @@ const CodeBattlePlatform = () => {
   return (
     <div className="flex flex-col w-full max-w-6xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Code className="w-8 h-8 text-indigo-500" />
-          <h1 className="text-2xl font-bold">CodeBattle</h1>
-        </div>
-        <div className="flex items-center gap-4">
-          <Avatar>
-            <AvatarImage src="/api/placeholder/32/32" alt="User" />
-            <AvatarFallback>US</AvatarFallback>
-          </Avatar>
-          <span className="font-medium">codewarrior123</span>
-          <Badge variant="outline" className="ml-2 bg-amber-100">
-            <Trophy className="w-3 h-3 mr-1 text-amber-500" />
-            1750
-          </Badge>
-        </div>
-      </div>
+      <Navbar />
 
       {/* Main content */}
       <Tabs defaultValue="battles" onValueChange={setActiveTab} className="w-full">

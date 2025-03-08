@@ -27,14 +27,13 @@ type ActiveRooms = {
 };
 
 
-
 const activeRooms: ActiveRooms = {};
 
 io.on('connection', (socket) => {
 
-    socket.on('joinRoom', () => {
+    socket.on('joinRoom', (userid) => {
         console.log('user has joined room')
-        const roomId = findOrCreateRoom(socket.id);
+        const roomId = findOrCreateRoom(userid, socket.id);
         socket.join(roomId);
 
         const players = activeRooms[roomId].players;
@@ -62,17 +61,19 @@ io.on('connection', (socket) => {
     })
 })
 
-function findOrCreateRoom(socketId: string) {
+function findOrCreateRoom(userId: string, socketId: string) {
 
-    const openRoom = Object.keys(activeRooms).find((roomId) => activeRooms[roomId].players.length < 2)
+    console.log(activeRooms)
 
-    const roomId = openRoom || `room=${Date.now()}`
+    const openRoom = Object.keys(activeRooms).find((roomId) => activeRooms[roomId].players.length < 2 && !activeRooms[roomId].players.some(p => p.userId === userId))
+
+    const roomId = openRoom || `room=${uuidv4()}`
 
     if (!activeRooms[roomId]) {
         activeRooms[roomId] = { players: [] }
     }
 
-    activeRooms[roomId].players.push({ userId: socketId, socketId: socketId })
+    activeRooms[roomId].players.push({ userId: userId, socketId: socketId })
     return roomId;
 }
 
