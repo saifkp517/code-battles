@@ -39,7 +39,7 @@ const CodeExecutor: React.FC<CodeExecutorProps> = ({
   const testCases = [
     {
       input: "add(2, 3)",
-      expectedOutput: "5"
+      expectedOutput: "1"
     },
     {
       input: "add(-1, 1)",

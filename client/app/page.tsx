@@ -9,31 +9,38 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
 import Navbar from '@/components/Navbar';
+import { redirect } from 'next/navigation';
+
+import { useSession } from 'next-auth/react';
 
 
 const CodeBattlePlatform = () => {
+  const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState('battles');
   const [roomCode, setRoomCode] = useState('');
-  
+
+  if (status === "unauthenticated") {
+    redirect("/login");
+  }
   // Demo data
   const upcomingBattles = [
     { id: 1, name: 'Algorithm Showdown', players: 2, difficulty: 'Medium', startTime: '10:30 AM' },
     { id: 2, name: 'Data Structure Duel', players: 2, difficulty: 'Hard', startTime: '11:45 AM' },
     { id: 3, name: 'Frontend Challenge', players: 2, difficulty: 'Easy', startTime: '2:15 PM' }
   ];
-  
+
   const tournaments = [
-    { 
-      id: 101, 
-      name: 'Weekly Algorithm Tournament', 
-      participants: 16, 
+    {
+      id: 101,
+      name: 'Weekly Algorithm Tournament',
+      participants: 16,
       rounds: 4,
       prize: '$500',
       status: 'Registering',
       startDate: 'March 5, 2025'
     },
-    { 
-      id: 102, 
+    {
+      id: 102,
       name: 'React Masters',
       participants: 32,
       rounds: 5,
@@ -41,8 +48,8 @@ const CodeBattlePlatform = () => {
       status: 'Registering',
       startDate: 'March 10, 2025'
     },
-    { 
-      id: 103, 
+    {
+      id: 103,
       name: 'Backend Battle Royale',
       participants: 8,
       rounds: 3,
@@ -51,11 +58,11 @@ const CodeBattlePlatform = () => {
       startDate: 'March 3, 2025'
     }
   ];
-  
+
   const activeBattles = [
-    { 
-      id: 201, 
-      name: 'Dynamic Programming Challenge', 
+    {
+      id: 201,
+      name: 'Dynamic Programming Challenge',
       players: [
         { username: 'codemaster99', avatar: '/api/placeholder/30/30', rating: 1850 },
         { username: 'algorithmQueen', avatar: '/api/placeholder/30/30', rating: 1920 }
@@ -63,9 +70,9 @@ const CodeBattlePlatform = () => {
       viewers: 24,
       timeLeft: '14:22'
     },
-    { 
-      id: 202, 
-      name: 'CSS Battle', 
+    {
+      id: 202,
+      name: 'CSS Battle',
       players: [
         { username: 'frontendWizard', avatar: '/api/placeholder/30/30', rating: 1720 },
         { username: 'designDragon', avatar: '/api/placeholder/30/30', rating: 1690 }
@@ -74,7 +81,7 @@ const CodeBattlePlatform = () => {
       timeLeft: '08:45'
     }
   ];
-  
+
   const leaderboard = [
     { rank: 1, username: 'algorithmQueen', avatar: '/api/placeholder/30/30', rating: 1920, wins: 42, losses: 7 },
     { rank: 2, username: 'codemaster99', avatar: '/api/placeholder/30/30', rating: 1850, wins: 38, losses: 10 },
@@ -86,7 +93,7 @@ const CodeBattlePlatform = () => {
   return (
     <div className="flex flex-col w-full max-w-6xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <Navbar />
+      <Navbar username={session?.user?.name} icon={session?.user?.image} eloscore={123} />
 
       {/* Main content */}
       <Tabs defaultValue="battles" onValueChange={setActiveTab} className="w-full">
@@ -116,16 +123,21 @@ const CodeBattlePlatform = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-2">
-                    <Input 
+                    <Input
                       value={roomCode}
-                      onChange={(e) => {
+                      onChange={e => {
                         setRoomCode(e.target.value)
-                        window.location.href = "/battle"
                       }}
                       placeholder="Enter room code"
                       className="flex-1"
                     />
-                    <Button>Join</Button>
+                    <Button
+                      onClick={(e) => {
+                        window.location.href = "/battle"
+                      }}
+                    >
+                      Join
+                    </Button>
                   </div>
                   <div className="flex justify-center">
                     <Button variant="outline" className="w-full">
@@ -143,10 +155,10 @@ const CodeBattlePlatform = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-4 justify-center">
-                    <Button variant="outline">
+                    <Button variant="default">
                       Easy
                     </Button>
-                    <Button variant="default">
+                    <Button variant="outline">
                       Medium
                     </Button>
                     <Button variant="outline">
@@ -159,7 +171,7 @@ const CodeBattlePlatform = () => {
             </div>
           </div>
 
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>Upcoming Battles</CardTitle>
             </CardHeader>
@@ -260,7 +272,7 @@ const CodeBattlePlatform = () => {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </TabsContent>
 
         {/* Tournaments Tab */}
@@ -275,8 +287,8 @@ const CodeBattlePlatform = () => {
                       <CardDescription>Starts on {tournament.startDate}</CardDescription>
                     </div>
                     <Badge className={
-                      tournament.status === 'Registering' ? 'bg-green-100 text-green-800' : 
-                      'bg-blue-100 text-blue-800'
+                      tournament.status === 'Registering' ? 'bg-green-100 text-green-800' :
+                        'bg-blue-100 text-blue-800'
                     }>
                       {tournament.status}
                     </Badge>
@@ -306,7 +318,7 @@ const CodeBattlePlatform = () => {
               </Card>
             ))}
           </div>
-          
+
           <Card>
             <CardHeader>
               <CardTitle>Create Tournament</CardTitle>
@@ -329,8 +341,8 @@ const CodeBattlePlatform = () => {
               <ScrollArea className="h-96">
                 <div className="space-y-1">
                   {leaderboard.map((player, index) => (
-                    <div 
-                      key={player.username} 
+                    <div
+                      key={player.username}
                       className={`flex items-center p-3 rounded-md ${index === 0 ? 'bg-amber-50' : index === 1 ? 'bg-slate-50' : index === 2 ? 'bg-orange-50' : ''}`}
                     >
                       <div className="w-8 text-center font-semibold">

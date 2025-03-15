@@ -2,7 +2,10 @@ import express from "express";
 import { Server } from "socket.io"
 import { createServer } from "http"
 import { v4 as uuidv4 } from "uuid"
-import cors from "cors"
+import fs from "fs";
+import jwt from "jsonwebtoken";
+
+import path from "path";
 
 const app = express();
 const httpServer = createServer(app)
@@ -26,10 +29,32 @@ type ActiveRooms = {
     [key: string]: Room
 };
 
+interface Categories {
+    [folderName: string]: string[];
+}
+
 
 const activeRooms: ActiveRooms = {};
 
+io.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    if(!token) {
+        return next(new Error("Authentication Error"));
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || "a-string-secret-at-least-256-bits-long");
+        socket.user = decoded;
+        next();
+    } catch (err) {
+        console.log("invalid token")
+        next(new Error("Invalid token"));
+    }
+})
+
 io.on('connection', (socket) => {
+
+    console.log(`User ${JSON.stringify(socket.handshake, null, 2)} connected`);
 
     socket.on('joinRoom', (userid) => {
         console.log('user has joined room')
@@ -57,6 +82,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
+        console.log(`User ${socket.user} disconnected`);
         removePlayer(socket.id);
     })
 })
@@ -89,6 +115,48 @@ function removePlayer(socketId: string) {
         }
     }
 }
+
+function categorizeProblems(dir: string) {
+    const categories: Categories = {};
+
+    const folders = fs.readdirSync(dir, { withFileTypes: true });
+
+    folders.forEach((folder) => {
+        if (folder.isDirectory()) {
+            const folderPath = path.join(dir, folder.name);
+
+            const problems = fs.readdirSync(folderPath).filter(file => file.endsWith('.py'));
+
+            categories[folder.name] = problems;
+
+        }
+
+
+    })
+
+    return categories;
+}
+
+const baseDir = '../../coding-problems'
+
+const categorizedData = categorizeProblems(baseDir);
+
+
+const readFirstFileInCategory = (category: string, categories: Categories) => {
+    // const categories = categorizeProblems(baseDir);
+
+    if (!categories[category] || categories[category].length === 0) {
+        console.log(`No files found in category: ${category}`);
+        return;
+    }
+
+    const firstFile = categories[category][0];
+    const filePath = path.join(baseDir, category, firstFile);
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    console.log(`Contents of ${firstFile} in ${category} category:\n`);
+    console.log(content);
+};
 
 
 console.log(activeRooms)

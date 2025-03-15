@@ -11,9 +11,16 @@ import { io } from 'socket.io-client';
 import CodeExecutor from '../utils/codeExecutor';
 import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-// import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSession } from 'next-auth/react';
+
+
+
+
+
+
+
+
 
 const socket = io('http://localhost:4000');
 
@@ -75,6 +82,7 @@ const CodeBattleArena = () => {
   ];
 
   const { data: session, status } = useSession();
+  const [connected, setConnected] = useState(false);
 
   // State variables
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
@@ -191,8 +199,16 @@ fn main() {
   // Socket connection and event handling
   useEffect(() => {
     if (!socket || !session?.user?.id || joinedRoom.current) return;
+    if(session) {
+      alert("session")
+      socket.auth = { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30"};
+      socket.connect();
+    }
 
     const handleConnect = () => {
+
+
+
       setSocketId(socket.id || "");
       if (session?.user?.id) {
         socket.emit('joinRoom', session?.user?.id);
