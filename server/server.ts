@@ -1,11 +1,17 @@
 import express from "express";
-import { Server } from "socket.io"
+import { PrismaClient } from "@prisma/client";
+import { Server, Socket } from "socket.io"
 import { createServer } from "http"
 import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
 import jwt from "jsonwebtoken";
-
 import path from "path";
+
+interface AuthenticatedSocket extends Socket {
+    user?: any;
+}
+
+const prisma = new PrismaClient();
 
 const app = express();
 const httpServer = createServer(app)
@@ -36,7 +42,7 @@ interface Categories {
 
 const activeRooms: ActiveRooms = {};
 
-io.use((socket, next) => {
+io.use((socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token;
     if(!token) {
         return next(new Error("Authentication Error"));
@@ -53,8 +59,8 @@ io.use((socket, next) => {
 })
 
 io.on('connection', (socket) => {
-
-    console.log(`User ${JSON.stringify(socket.handshake, null, 2)} connected`);
+``
+    console.log(`User ${JSON.stringify(socket.user, null, 2)} connected`);
 
     socket.on('joinRoom', (userid) => {
         console.log('user has joined room')
@@ -159,7 +165,22 @@ const readFirstFileInCategory = (category: string, categories: Categories) => {
 };
 
 
-console.log(activeRooms)
+//db setup
+async function main() {
+  // ... you will write your Prisma Client queries here
+  const allUsers = await prisma.user.findMany()
+  console.log(allUsers)
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect()
+  })
+  .catch(async (e) => {
+    console.error(e)
+    await prisma.$disconnect()
+    process.exit(1)
+  })
 
 httpServer.listen(4000, () => console.log("Websocket server running on port 4000"))
 
