@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import path from "path";
+import { createModuleResolutionCache } from "typescript";
 
 interface AuthenticatedSocket extends Socket {
     user?: any;
@@ -22,8 +23,9 @@ const io = new Server(httpServer, {
 })
 
 type Player = {
-    socketId: string,
+    socketId: string
     userId: string
+    eloRating: number
 }
 
 type Room = {
@@ -40,11 +42,126 @@ interface Categories {
 }
 
 
+//user match-making algorithm
+class MinHeap<T> {
+
+    private heap: T[] = [];
+    private compare: (a: T, b: T) => number;
+
+    constructor(compareFunction: (a: T, b: T) => number) {
+        this.compare = compareFunction;
+    }
+
+    private swap(i: number, j: number): void {
+        [this.heap[i], this.heap[j]] = [this.heap[j], this.heap[i]];
+    }
+
+    insert(value: T) {
+        this.heap.push(value);
+        this.bubbleUp(this.heap.length - 1);
+    }
+
+    private bubbleUp(index: number): void {
+        while (index > 0) {
+            let parentIndex = Math.floor((index - 1) / 2);
+            if (this.compare(this.heap[index], this.heap[parentIndex]) >= 0) break;
+            this.swap(index, parentIndex);
+            index = parentIndex;
+        }
+    }
+
+    extractMin(): T | null {
+        if (this.heap.length === 0) return null;
+        if (this.heap.length === 1) return this.heap.pop() as T;
+
+        const min = this.heap[0];
+        this.heap[0] = this.heap.pop() as T;
+        this.bubbleDown(0);
+        return min;
+    }
+
+    bubbleDown(index: number): void {
+        let smallest = index;
+        let leftChild = 2 * index + 1;
+        let rightChild = 2 * index + 1;
+
+        if (leftChild < this.heap.length && this.compare(this.heap[leftChild], this.heap[smallest]) < 0) {
+            smallest = leftChild;
+        }
+
+        if (rightChild < this.heap.length && this.compare(this.heap[rightChild], this.heap[smallest]) < 0) {
+            smallest = rightChild;
+        }
+
+        if (smallest !== index) {
+            this.swap(index, smallest);
+            this.bubbleDown(smallest);
+        }
+    }
+
+    getSize(): number {
+        return this.heap.length;
+    }
+}
+
+class MatchMaking {
+    private eloHeaps: Map<number, MinHeap<Player>> = new Map();
+
+    constructor() { }
+
+    private getEloRange(elo: number): number {
+        return Math.floor(elo / 100) * 100;
+    }
+
+    addPlayer(player: Player) {
+        const range = this.getEloRange(player.eloRating);
+
+        if (!this.eloHeaps.has(range)) {
+            this.eloHeaps.set(range, new MinHeap<Player>((a, b) => a.eloRating - b.eloRating))
+        }
+
+        this.eloHeaps.get(range)!.insert(player);
+    }
+
+    findMatch(playerElo: number, eloRange = 50): Player | null {
+        const range = this.getEloRange(playerElo);
+
+        let bestMatch: Player | null = null;
+
+        // Check the player's range heap first
+        if (this.eloHeaps.has(range)) {
+            bestMatch = this.eloHeaps.get(range)!.extractMin();
+        }
+
+        // If no match, check adjacent ranges (lower & higher ELO brackets)
+        if (!bestMatch) {
+            if (this.eloHeaps.has(range - 100)) {
+                bestMatch = this.eloHeaps.get(range - 100)!.extractMin();
+            }
+            if (!bestMatch && this.eloHeaps.has(range + 100)) {
+                bestMatch = this.eloHeaps.get(range + 100)!.extractMin();
+            }
+        }
+
+        if(!bestMatch) {
+            for(const heap of this.eloHeaps.values()) {
+                if(heap.getSize() > 0) {
+                    bestMatch = heap.extractMin();
+                    break;
+                }
+            }
+        }
+
+        return bestMatch;
+    }
+}
+
+
 const activeRooms: ActiveRooms = {};
 
 io.use((socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token;
-    if(!token) {
+    if (!token) {
         return next(new Error("Authentication Error"));
     }
 
@@ -58,8 +175,8 @@ io.use((socket: AuthenticatedSocket, next) => {
     }
 })
 
-io.on('connection', (socket) => {
-``
+io.on('connection', (socket: AuthenticatedSocket) => {
+    ``
     console.log(`User ${JSON.stringify(socket.user, null, 2)} connected`);
 
     socket.on('joinRoom', (userid) => {
@@ -105,7 +222,7 @@ function findOrCreateRoom(userId: string, socketId: string) {
         activeRooms[roomId] = { players: [] }
     }
 
-    activeRooms[roomId].players.push({ userId: userId, socketId: socketId })
+    activeRooms[roomId].players.push({ userId: userId, socketId: socketId, eloRating: 100 })
     return roomId;
 }
 
@@ -167,20 +284,20 @@ const readFirstFileInCategory = (category: string, categories: Categories) => {
 
 //db setup
 async function main() {
-  // ... you will write your Prisma Client queries here
-  const allUsers = await prisma.user.findMany()
-  console.log(allUsers)
+    // ... you will write your Prisma Client queries here
+    const allUsers = await prisma.user.findMany()
+    console.log(allUsers)
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect()
-  })
-  .catch(async (e) => {
-    console.error(e)
-    await prisma.$disconnect()
-    process.exit(1)
-  })
+    .then(async () => {
+        await prisma.$disconnect()
+    })
+    .catch(async (e) => {
+        console.error(e)
+        await prisma.$disconnect()
+        process.exit(1)
+    })
 
 httpServer.listen(4000, () => console.log("Websocket server running on port 4000"))
 
