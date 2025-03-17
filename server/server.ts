@@ -58,7 +58,7 @@ io.use((socket: AuthenticatedSocket, next) => {
     }
 })
 
-io.on('connection', (socket) => {
+io.on('connection', (socket: AuthenticatedSocket) => {
 ``
     console.log(`User ${JSON.stringify(socket.user, null, 2)} connected`);
 
@@ -122,30 +122,30 @@ function removePlayer(socketId: string) {
     }
 }
 
-function categorizeProblems(dir: string) {
-    const categories: Categories = {};
+// function categorizeProblems(dir: string) {
+//     const categories: Categories = {};
 
-    const folders = fs.readdirSync(dir, { withFileTypes: true });
+//     const folders = fs.readdirSync(dir, { withFileTypes: true });
 
-    folders.forEach((folder) => {
-        if (folder.isDirectory()) {
-            const folderPath = path.join(dir, folder.name);
+//     folders.forEach((folder) => {
+//         if (folder.isDirectory()) {
+//             const folderPath = path.join(dir, folder.name);
 
-            const problems = fs.readdirSync(folderPath).filter(file => file.endsWith('.py'));
+//             const problems = fs.readdirSync(folderPath).filter(file => file.endsWith('.py'));
 
-            categories[folder.name] = problems;
+//             categories[folder.name] = problems;
 
-        }
+//         }
 
 
-    })
+//     })
 
-    return categories;
-}
+//     return categories;
+// }
 
 const baseDir = '../../coding-problems'
 
-const categorizedData = categorizeProblems(baseDir);
+// const categorizedData = categorizeProblems(baseDir);
 
 
 const readFirstFileInCategory = (category: string, categories: Categories) => {
