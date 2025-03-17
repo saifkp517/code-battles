@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
 import jwt from "jsonwebtoken";
 import path from "path";
-import { createModuleResolutionCache } from "typescript";
+import router from "./routes/authRoutes";
 
 interface AuthenticatedSocket extends Socket {
     user?: any;
@@ -21,6 +21,13 @@ const io = new Server(httpServer, {
         origin: "http://localhost:3000"
     }
 })
+
+//middleware
+app.use(express.json());
+
+//Routes
+app.use("/auth", router);
+
 
 type Player = {
     socketId: string
@@ -285,8 +292,6 @@ const readFirstFileInCategory = (category: string, categories: Categories) => {
 //db setup
 async function main() {
     // ... you will write your Prisma Client queries here
-    const allUsers = await prisma.user.findMany()
-    console.log(allUsers)
 }
 
 main()
