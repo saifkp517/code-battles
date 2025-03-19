@@ -7,22 +7,14 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Editor from '@monaco-editor/react';
-import { io } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import CodeExecutor from '../utils/codeExecutor';
 import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSession } from 'next-auth/react';
+import { redirect } from 'next/navigation';
 
-
-
-
-
-
-
-
-
-const socket = io('http://localhost:4000');
 
 const CodeBattleArena = () => {
   // Sample problem statements - in a real app, these would come from an API
@@ -82,7 +74,6 @@ const CodeBattleArena = () => {
   ];
 
   const { data: session, status } = useSession();
-  const [connected, setConnected] = useState(false);
 
   // State variables
   const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
@@ -90,7 +81,7 @@ const CodeBattleArena = () => {
   const [roomId, setRoomId] = useState('');
   const [opponentStatus, setOpponentStatus] = useState('coding');
   const [showProblem, setShowProblem] = useState(true);
-  const [socketId, setSocketId] = useState('');
+  const [matchFound, setMatchFound] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -100,13 +91,14 @@ const CodeBattleArena = () => {
   const [opponentCode, setOpponentCode] = useState('');
 
   const joinedRoom = useRef(false);
+  const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef(null);
 
   // Generate initial code based on problem and language
   const generateInitialCode = (problem, language) => {
     const functionName = generateFunctionName(problem.description);
-    
-    switch(language.name) {
+
+    switch (language.name) {
       case 'JavaScript':
         return `function ${functionName}(arr) {
   // Implement your solution here
@@ -114,14 +106,14 @@ const CodeBattleArena = () => {
 }
 
 console.log(${functionName}([-2, 1, -3, 4, -1, 2, 1, -5, 4]));`;
-      
+
       case 'Python':
         return `def ${functionName.toLowerCase()}(arr):
     # Implement your solution here
     return None
 
 print(${functionName.toLowerCase()}([-2, 1, -3, 4, -1, 2, 1, -5, 4]))`;
-      
+
       case 'C++':
         return `#include <iostream>
 #include <vector>
@@ -140,7 +132,7 @@ int main() {
     // Print result
     return 0;
 }`;
-      
+
       case 'Java':
         return `import java.util.*;
 
@@ -156,7 +148,7 @@ public class Solution {
         // Print result
     }
 }`;
-      
+
       case 'Rust':
         return `fn ${functionName.toLowerCase()}(nums: &[i32]) -> Vec<i32> {
     // Implement your solution here
@@ -168,7 +160,7 @@ fn main() {
     let result = ${functionName.toLowerCase()}(&nums);
     println!("{:?}", result);
 }`;
-      
+
       default:
         return `// Implement your solution here`;
     }
@@ -197,64 +189,129 @@ fn main() {
   }, [currentProblem, selectedLanguage]);
 
   // Socket connection and event handling
+
+  if (status === "unauthenticated") {
+    redirect("/login");
+  }
+
   useEffect(() => {
-    if (!socket || !session?.user?.id || joinedRoom.current) return;
-    if(session) {
-      alert("session")
-      socket.auth = { token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30"};
-      socket.connect();
+
+    if (!session?.token) {
+      return;
     }
 
-    const handleConnect = () => {
+    if (!socketRef.current) {
+      console.log(session.token)
+      socketRef.current = io("http://localhost:4000", {
+        auth: {
+          token: session.token, // No more TypeScript errors
+        },
+        autoConnect: false,
+      });
 
 
+      const handleOpponentCode = ({ code, from }) => {
+        if (socketRef.current && from === socketRef.current.id) {
+          setYourCode(code); // It's your code
+        } else {
+          setOpponentCode(code); // It's opponent's code
+        }
+      };
 
-      setSocketId(socket.id || "");
-      if (session?.user?.id) {
-        socket.emit('joinRoom', session?.user?.id);
-        joinedRoom.current = true;
+      const handleConnect = () => {
+        socketRef.current?.emit('findMatch', { userId: session?.user?.email, eloRating: 100 });
+
+        socketRef.current?.on("matchFound", () => {
+          setMatchFound(true);
+
+          socketRef.current?.emit('joinRoom', session?.user?.email);
+
+          socketRef.current?.on('roomAssigned', ({ roomId }) => {
+            console.log('Assigned to room:', roomId);
+            setRoomId(roomId);
+          });
+
+          socketRef.current?.on('opponentCode', handleOpponentCode);
+        });
+
+
       }
-    };
 
-    const handleOpponentCode = ({ code, from }) => {
-      if (from === socket.id) {
-        setYourCode(code); // It's your code
-      } else {
-        setOpponentCode(code); // It's opponent's code
-      }
-    };
 
-    const handleMessage = ({ message, from, timestamp }) => {
-      setMessages(prev => [
-        ...prev, 
-        { text: message, isFromYou: from === socket.id, timestamp }
-      ]);
-    };
+      socketRef.current.connect();
 
-    if (socket.connected) {
-      handleConnect(); // Handle immediately if already connected
+      socketRef.current.on("connect", handleConnect)
+
+
+      socketRef.current.on("disconnect", () => {
+        console.log("User disconnected");
+      });
+
+
+
+
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.off("connect");
+          socketRef.current.off("disconnect");
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+      };
     }
+  }, [session?.token]);
 
-    socket.on('connect', handleConnect);
-    socket.on('opponentCode', handleOpponentCode);
-    socket.on('chatMessage', handleMessage);
-    socket.on('roomAssigned', ({ roomId }) => {
-      console.log('Assigned to room:', roomId);
-      setRoomId(roomId);
-    });
 
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('opponentCode', handleOpponentCode);
-      socket.off('chatMessage', handleMessage);
-      socket.off('roomAssigned');
-    };
-  }, [session?.user?.id]);
+  // useEffect(() => {
+  //   if (!socket || !session?.user?.id || joinedRoom.current) return;
+
+  //   const handleConnect = () => {
+
+
+
+  //     setSocketId(socket.id || "");
+  //     if (session?.user?.id) {
+  //       socket.emit('joinRoom', session?.user?.id);
+  //       joinedRoom.current = true;
+  //     }
+  //   };
+
+  //   const handleOpponentCode = ({ code, from }) => {
+  //     if (from === socket.id) {
+  //       setYourCode(code); // It's your code
+  //     } else {
+  //       setOpponentCode(code); // It's opponent's code
+  //     }
+  //   };
+
+  //   const handleMessage = ({ message, from, timestamp }) => {
+  //     setMessages(prev => [
+  //       ...prev,
+  //       { text: message, isFromYou: from === socket.id, timestamp }
+  //     ]);
+  //   };
+
+  //   if (socket.connected) {
+  //     handleConnect(); // Handle immediately if already connected
+  //   }
+
+  //   socket.on('connect', handleConnect);
+  //   socket.on('opponentCode', handleOpponentCode);
+  //   socket.on('chatMessage', handleMessage);
+
+
+  //   return () => {
+  //     socket.off('connect', handleConnect);
+  //     socket.off('opponentCode', handleOpponentCode);
+  //     socket.off('chatMessage', handleMessage);
+  //     socket.off('roomAssigned');
+  //   };
+  // }, [session?.user?.id]);
 
   // Auto scroll chat to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // }, [messages]);
 
   // Timer setup
   useEffect(() => {
@@ -272,9 +329,9 @@ fn main() {
   }, []);
 
   // Send code updates to opponent
-  const handleCodeChange = (newCode) => {
+  const handleCodeChange = (newCode: string) => {
     setYourCode(newCode || "");
-    socket.emit('codeUpdate', { roomId: roomId, code: newCode });
+    socketRef.current?.emit('codeUpdate', { roomId: roomId, code: newCode });
   };
 
   // Send chat message
@@ -285,12 +342,12 @@ fn main() {
         roomId: roomId,
         timestamp: new Date().toISOString()
       };
-      
-      socket.emit('sendMessage', message);
-      setMessages(prev => [
-        ...prev, 
-        { text: newMessage, isFromYou: true, timestamp: message.timestamp }
-      ]);
+
+      // socket.emit('sendMessage', message);
+      // setMessages(prev => [
+      //   ...prev,
+      //   { text: newMessage, isFromYou: true, timestamp: message.timestamp }
+      // ]);
       setNewMessage('');
     }
   };
@@ -417,16 +474,15 @@ fn main() {
                       </div>
                     ) : (
                       messages.map((msg, index) => (
-                        <div 
-                          key={index} 
+                        <div
+                          key={index}
                           className={`mb-2 ${msg.isFromYou ? 'text-right' : 'text-left'}`}
                         >
-                          <div 
-                            className={`inline-block p-2 rounded-lg ${
-                              msg.isFromYou 
-                                ? 'bg-blue-600 text-white' 
-                                : 'bg-slate-700 text-slate-200'
-                            }`}
+                          <div
+                            className={`inline-block p-2 rounded-lg ${msg.isFromYou
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-700 text-slate-200'
+                              }`}
                           >
                             {msg.text}
                           </div>
@@ -456,140 +512,152 @@ fn main() {
           </div>
         </div>
       </header>
+      {!matchFound ? (
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-white"></div>
+          <p className="text-white mt-4">Searching for a match...</p>
+          {/* <p className="text-slate-400 mt-2 italic">{tip}</p> */}
+        </div>
+      ) : (
+        <div className="text-white">
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+            {/* Problem Statement Section */}
+            {showProblem && (
+              <div className="w-full md:w-1/4 p-4 border-r border-slate-800 bg-slate-900 overflow-y-auto">
+                <Card className="bg-slate-800 border-slate-700">
+                  <CardHeader>
+                    <CardTitle className="text-white">Problem: {currentProblem.title}</CardTitle>
+                    <CardDescription>Difficulty: {currentProblem.difficulty}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-slate-300 whitespace-pre-line">
+                    {currentProblem.description}
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {/* Problem Statement Section */}
-        {showProblem && (
-          <div className="w-full md:w-1/4 p-4 border-r border-slate-800 bg-slate-900 overflow-y-auto">
-            <Card className="bg-slate-800 border-slate-700">
-              <CardHeader>
-                <CardTitle className="text-white">Problem: {currentProblem.title}</CardTitle>
-                <CardDescription>Difficulty: {currentProblem.difficulty}</CardDescription>
-              </CardHeader>
-              <CardContent className="text-slate-300 whitespace-pre-line">
-                {currentProblem.description}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+            {/* Main Coding Area */}
+            <div className={`flex-1 flex flex-col ${showProblem ? 'md:w-2/3' : 'w-full'}`}>
+              <Tabs defaultValue="split" className="flex-1 flex flex-col h-screen">
+                <div className="bg-slate-900 border-b border-slate-800 px-6 py-2">
+                  <TabsList className="bg-slate-800">
+                    <TabsTrigger value="split">Split View</TabsTrigger>
+                    <TabsTrigger value="you">Your Code</TabsTrigger>
+                    <TabsTrigger value="opponent">Opponent's Code</TabsTrigger>
+                  </TabsList>
+                </div>
 
-        {/* Main Coding Area */}
-        <div className={`flex-1 flex flex-col ${showProblem ? 'md:w-2/3' : 'w-full'}`}>
-          <Tabs defaultValue="split" className="flex-1 flex flex-col h-screen">
-            <div className="bg-slate-900 border-b border-slate-800 px-6 py-2">
-              <TabsList className="bg-slate-800">
-                <TabsTrigger value="split">Split View</TabsTrigger>
-                <TabsTrigger value="you">Your Code</TabsTrigger>
-                <TabsTrigger value="opponent">Opponent's Code</TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="split" className="flex-1 flex flex-col md:flex-row m-0 border-0 outline-none">
-              {/* Your Code Editor */}
-              <div className="flex-1 border-r border-slate-800 flex flex-col">
-                <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
-                    <div className="flex items-center">
-                      {getStatusIcon(yourStatus)}
-                      <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
-                        {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
-                      </span>
+                <TabsContent value="split" className="flex-1 flex flex-col md:flex-row m-0 border-0 outline-none">
+                  {/* Your Code Editor */}
+                  <div className="flex-1 border-r border-slate-800 flex flex-col">
+                    <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
+                        <div className="flex items-center">
+                          {getStatusIcon(yourStatus)}
+                          <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
+                            {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
+                      <Editor
+                        height="100%"
+                        language={"javascript"}
+                        theme="vs-dark"
+                        value={yourCode}
+                        onChange={handleCodeChange}
+                        options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                      />
                     </div>
                   </div>
-                </div>
-                <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
-                  <Editor
-                    height="100%"
-                    language={"javascript"}
-                    theme="vs-dark"
-                    value={yourCode}
-                    onChange={handleCodeChange}
-                    options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
-                  />
-                </div>
-              </div>
 
-              {/* Opponent's Code View */}
-              <div className="flex-1 flex flex-col">
-                <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
-                    <div className="flex items-center">
-                      {getStatusIcon(opponentStatus)}
-                      <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
-                        {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
-                      </span>
+                  {/* Opponent's Code View */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
+                        <div className="flex items-center">
+                          {getStatusIcon(opponentStatus)}
+                          <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
+                            {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
+                      <pre className="whitespace-pre">
+                        {opponentCode || "Opponent hasn't started coding yet..."}
+                      </pre>
                     </div>
                   </div>
-                </div>
-                <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
-                  <pre className="whitespace-pre">
-                    {opponentCode || "Opponent hasn't started coding yet..."}
-                  </pre>
-                </div>
-              </div>
-            </TabsContent>
+                </TabsContent>
 
-            <TabsContent value="you" className="flex-1 m-0 border-0 outline-none">
-              {/* Full screen Your Code */}
-              <div className="flex-1 flex flex-col h-full">
-                <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
-                    <div className="flex items-center">
-                      {getStatusIcon(yourStatus)}
-                      <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
-                        {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
-                      </span>
+                <TabsContent value="you" className="flex-1 m-0 border-0 outline-none">
+                  {/* Full screen Your Code */}
+                  <div className="flex-1 flex flex-col h-full">
+                    <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-blue-950 text-blue-400 border-blue-700">You</Badge>
+                        <div className="flex items-center">
+                          {getStatusIcon(yourStatus)}
+                          <span className={`ml-1 text-sm ${getStatusColor(yourStatus)}`}>
+                            {yourStatus.charAt(0).toUpperCase() + yourStatus.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
+                      <Editor
+                        height="100%"
+                        language={selectedLanguage.extension}
+                        theme="vs-dark"
+                        value={yourCode}
+                        onChange={handleCodeChange}
+                        options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
+                      />
                     </div>
                   </div>
-                </div>
-                <div className="flex-1 bg-slate-950 p-0 font-mono text-sm text-slate-300 overflow-auto">
-                  <Editor
-                    height="100%"
-                    language={selectedLanguage.extension}
-                    theme="vs-dark"
-                    value={yourCode}
-                    onChange={handleCodeChange}
-                    options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
-                  />
-                </div>
-              </div>
-            </TabsContent>
+                </TabsContent>
 
-            <TabsContent value="opponent" className="flex-1 m-0 border-0 outline-none">
-              {/* Full screen Opponent's Code */}
-              <div className="flex-1 flex flex-col h-full">
-                <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
-                    <div className="flex items-center">
-                      {getStatusIcon(opponentStatus)}
-                      <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
-                        {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
-                      </span>
+                <TabsContent value="opponent" className="flex-1 m-0 border-0 outline-none">
+                  {/* Full screen Opponent's Code */}
+                  <div className="flex-1 flex flex-col h-full">
+                    <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="bg-purple-950 text-purple-400 border-purple-700">Opponent</Badge>
+                        <div className="flex items-center">
+                          {getStatusIcon(opponentStatus)}
+                          <span className={`ml-1 text-sm ${getStatusColor(opponentStatus)}`}>
+                            {opponentStatus.charAt(0).toUpperCase() + opponentStatus.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
+                      <pre className="whitespace-pre">
+                        {opponentCode || "Opponent hasn't started coding yet..."}
+                      </pre>
                     </div>
                   </div>
-                </div>
-                <div className="flex-1 bg-slate-950 p-4 font-mono text-sm text-slate-300 overflow-auto">
-                  <pre className="whitespace-pre">
-                    {opponentCode || "Opponent hasn't started coding yet..."}
-                  </pre>
+                </TabsContent>
+              </Tabs>
+
+              {/* Results Panel */}
+              <div className="bg-slate-900 border-t border-slate-800 p-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <CodeExecutor sourceCode={yourCode} languageId={selectedLanguage.id} />
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
-
-          {/* Results Panel */}
-          <div className="bg-slate-900 border-t border-slate-800 p-4">
-            <div className="grid grid-cols-1 gap-4">
-              <CodeExecutor sourceCode={yourCode} languageId={selectedLanguage.id} />
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+
+
     </div>
   );
 };

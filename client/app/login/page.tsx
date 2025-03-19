@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useTheme } from "next-themes";
-import { Eye, EyeOff, Mail, Lock, Github, Code, Trophy, Zap, Terminal } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, Github, Code, Trophy, Zap, Terminal, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +28,12 @@ import { redirect } from "next/navigation";
 
 export default function LoginPage() {
 
+    const [email, setEmail] = useState("");
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+    const [password, setPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [isLogin, setIsLogin] = useState(true);
     const { theme: configTheme } = useThemeConfig();
     const [mounted, setMounted] = useState(false);
     const [leaderboardData, setLeaderboardData] = useState([
@@ -37,6 +41,38 @@ export default function LoginPage() {
         { name: "AlgoMaster", wins: 137, rank: 2 },
         { name: "ByteCrusher", wins: 129, rank: 3 },
     ]);
+
+    const handleSignIn = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (isLogin) {
+            const res = await signIn("credentials", { email, password, redirect: false });
+
+            if (res?.error) {
+                console.log(res?.error);
+                setError(res?.error)
+            }
+            else window.location.href = "/";
+        } else {
+            const res = await fetch(`${process.env.BACKEND_URL}/auth/register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: "test",
+                    email: email,
+                    password: password
+                }),
+            });
+
+            if (res.ok) setSuccess("Registration successful! You can now log in.");
+            else setError("User already exists or an error occurred.");
+        }
+        // Handle form submission logic here
+    };
 
     const { data: session, status } = useSession();
 
@@ -146,61 +182,95 @@ export default function LoginPage() {
             </div>
 
             {/* Right Side (Login Form) */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 ">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
                 <Card className={`w-full max-w-md border-gray-300 shadow-lg relative ${radiusClass} overflow-hidden bg-white`}>
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-400 via-orange-500 to-orange-400"></div>
 
                     <CardHeader className="space-y-1">
                         <div className="flex justify-center mb-2">
                             <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                                <Code className="h-6 w-6 text-orange-600" />
+                                {isLogin ?
+                                    <Code className="h-6 w-6 text-orange-600" /> :
+                                    <UserPlus className="h-6 w-6 text-orange-600" />
+                                }
                             </div>
                         </div>
-                        <CardTitle className="text-2xl font-bold text-center text-gray-800">Join The Battle</CardTitle>
+                        <CardTitle className="text-2xl font-bold text-center text-gray-800">
+                            {isLogin ? "Join The Battle" : "Create Your Account"}
+                        </CardTitle>
                         <CardDescription className="text-center text-gray-600">
-                            Sign in to compete in coding challenges and climb the ranks
+                            {isLogin ?
+                                "Sign in to compete in coding challenges and climb the ranks" :
+                                "Register to start your coding journey and join the competition"
+                            }
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent className="space-y-4">
-                        {/* Username/Email Field */}
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                            <Input placeholder="username or email" type="text" className="pl-10 text-gray-800 border-gray-300" />
-                        </div>
-
-                        {/* Password Field */}
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                            <Input
-                                placeholder="password"
-                                type={showPassword ? "text" : "password"}
-                                className="pl-10 pr-10 text-gray-800 border-gray-300"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                            >
-                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                        </div>
-
-                        {/* Remember Me & Forgot Password */}
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                                <Checkbox id="remember" />
-                                <Label htmlFor="remember" className="text-sm font-medium cursor-pointer text-gray-800">Remember me</Label>
+                    <CardContent>
+                        <form className="space-y-4" onSubmit={handleSubmit}>
+                            {/* Username Field */}
+                            <div className="relative">
+                                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input placeholder="username" type="text" className="pl-10 text-gray-800 border-gray-300" />
                             </div>
-                            <Link href="/forgot-password" className="text-sm font-medium text-orange-600 hover:text-orange-500">
-                                Forgot password?
-                            </Link>
-                        </div>
 
-                        {/* Sign In Button */}
-                        <Button onClick={() => signIn()} type="submit" className="w-full relative overflow-hidden bg-orange-600 text-white hover:bg-orange-500">
-                            <span className="relative z-10">Enter Arena</span>
-                        </Button>
+                            {/* Registration-only fields */}
+                            {!isLogin && (
+                                <div className="relative">
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                    <Input placeholder="email" type="text" className="pl-10 text-gray-800 border-gray-300" />
+                                </div>
+                            )}
+
+                            {/* Password Field */}
+                            <div className="relative">
+                                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="password"
+                                    type={showPassword ? "text" : "password"}
+                                    className="pl-10 pr-10 text-gray-800 border-gray-300"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                                >
+                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
+
+                            {/* Remember Me & Forgot Password (Login only) */}
+                            {isLogin && (
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox id="remember" />
+                                        <Label htmlFor="remember" className="text-sm font-medium cursor-pointer text-gray-800">Remember me</Label>
+                                    </div>
+                                    <Link href="/forgot-password" className="text-sm font-medium text-orange-600 hover:text-orange-500">
+                                        Forgot password?
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* Terms & Conditions (Registration only) */}
+                            {!isLogin && (
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox id="terms" />
+                                    <Label htmlFor="terms" className="text-sm font-medium cursor-pointer text-gray-800">
+                                        I agree to the{" "}
+                                        <Link href="/terms" className="text-orange-600 hover:text-orange-500">
+                                            Terms & Conditions
+                                        </Link>
+                                    </Label>
+                                </div>
+                            )}
+
+                            {/* Submit Button */}
+                            <Button type="submit" className="w-full relative overflow-hidden bg-orange-600 text-white hover:bg-orange-500">
+                                <span className="relative z-10">{isLogin ? "Enter Arena" : "Create Account"}</span>
+                            </Button>
+                            {error && <p className="text-gray-600">{error}</p>}
+                        </form>
 
                         {/* Divider */}
                         <div className="relative my-4">
@@ -228,13 +298,16 @@ export default function LoginPage() {
                         </div>
                     </CardContent>
 
-                    {/* Footer (Sign Up Link) */}
-                    <CardFooter className="flex justify-center ">
+                    {/* Footer (Toggle between Login/Register) */}
+                    <CardFooter className="flex justify-center">
                         <p className="text-sm text-gray-600">
-                            First time coder?{" "}
-                            <Link href="/register" className="text-orange-600 hover:text-orange-500 font-medium">
-                                Create your battle profile
-                            </Link>
+                            {isLogin ? "First time coder? " : "Already have an account? "}
+                            <button
+                                onClick={() => setIsLogin(!isLogin)}
+                                className="cursor-pointer text-orange-600 hover:text-orange-500 font-medium "
+                            >
+                                {isLogin ? "Create your battle profile" : "Sign in instead"}
+                            </button>
                         </p>
                     </CardFooter>
                 </Card>

@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ const CodeBattlePlatform = () => {
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState('battles');
   const [roomCode, setRoomCode] = useState('');
+
+
 
   if (status === "unauthenticated") {
     redirect("/login");
@@ -133,7 +135,7 @@ const CodeBattlePlatform = () => {
                     />
                     <Button
                       onClick={(e) => {
-                        window.location.href = "/battle"
+                        window.location.href = `/battle?userId=${session?.user!.name}&elo=${100}`
                       }}
                     >
                       Join

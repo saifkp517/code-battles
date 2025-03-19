@@ -51,8 +51,6 @@ export const authOptions = {
         async signIn({ user, account, profile }) {
             if (account.provider === 'google') {
                 try {
-                    // Ensure user exists in the backend
-                    console.log("URL: ", process.env.BACKEND_URL)
                     const { data } = await axios.post(`${process.env.BACKEND_URL}/auth/google-oauth`, {
                         email: user.email,
                         name: user.name,
@@ -66,6 +64,23 @@ export const authOptions = {
             }
             return true;
         },
+        async jwt({ token, account, user }) {
+            if (account) {
+                token.accessToken = account.access_token;
+            } else if (user) {
+                token.id = user.id;
+                token.name = user.name;
+                token.email = user.email;
+                token.accessToken = user.token;
+            }
+            return token;
+        },
+        async session({ session, token }) {
+            session.user.id = token.id;
+            session.token = token.accessToken;
+            return session;
+        },
+        secret: "test"
     }
 }
 export default NextAuth(authOptions)

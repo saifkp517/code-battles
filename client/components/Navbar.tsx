@@ -10,7 +10,6 @@ interface NavProps {
 }
 
 export default function Navbar({ username, icon, eloscore }: NavProps) {
-    console.log(icon)
     return (
         <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">

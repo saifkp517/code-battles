@@ -2,9 +2,11 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { Server, Socket } from "socket.io"
 import { createServer } from "http"
+import axios from "axios";
 import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
 import jwt from "jsonwebtoken";
+import cors from "cors";
 import path from "path";
 import router from "./routes/authRoutes";
 
@@ -23,6 +25,12 @@ const io = new Server(httpServer, {
 })
 
 //middleware
+app.use(cors({
+    origin: "http://localhost:3000", // Allow frontend on port 3000
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed HTTP methods
+    allowedHeaders: ["Content-Type", "Authorization"], // Allowed headers
+    credentials: true // Allow cookies and credentials
+}));
 app.use(express.json());
 
 //Routes
@@ -33,6 +41,7 @@ type Player = {
     socketId: string
     userId: string
     eloRating: number
+    socket?: Socket
 }
 
 type Room = {
@@ -150,9 +159,9 @@ class MatchMaking {
             }
         }
 
-        if(!bestMatch) {
-            for(const heap of this.eloHeaps.values()) {
-                if(heap.getSize() > 0) {
+        if (!bestMatch) {
+            for (const heap of this.eloHeaps.values()) {
+                if (heap.getSize() > 0) {
                     bestMatch = heap.extractMin();
                     break;
                 }
@@ -166,15 +175,27 @@ class MatchMaking {
 
 const activeRooms: ActiveRooms = {};
 
-io.use((socket: AuthenticatedSocket, next) => {
+async function verifyGoogleToken(idToken: string) {
+    try {
+        const { data } = await axios.get(`https://oauth2.googleapis.com/tokeninfo?access_token=${idToken}`);
+        return data; // Contains user details like email, name, picture, etc.
+    } catch (error) {
+        console.error("Invalid Google token", error);
+        throw new Error("Invalid token");
+    }
+}
+
+
+io.use(async (socket: AuthenticatedSocket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {
+        console.log("Authentication Error")
         return next(new Error("Authentication Error"));
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || "a-string-secret-at-least-256-bits-long");
-        socket.user = decoded;
+        const user = await verifyGoogleToken(token);
+        socket.user = user
         next();
     } catch (err) {
         console.log("invalid token")
@@ -185,6 +206,28 @@ io.use((socket: AuthenticatedSocket, next) => {
 io.on('connection', (socket: AuthenticatedSocket) => {
     ``
     console.log(`User ${JSON.stringify(socket.user, null, 2)} connected`);
+
+    socket.on("findMatch", (playerData) => {
+        const { userId, eloRating } = playerData;
+
+        const player: Player = { userId, eloRating, socket, socketId: socket.id }
+
+        console.log(`Player ${userId} search for a match....`);
+
+        const opponent = matchMakingSystem.findMatch(player.eloRating);
+
+        if (opponent) {
+            console.log(`Match found: ${player.userId} vs ${opponent.userId}`);
+
+            player.socket?.emit("matchFound", { opponentId: opponent.userId });
+            opponent.socket?.emit("matchFound", { opponentId: player.userId });
+
+        } else {
+            matchMakingSystem.addPlayer(player);
+
+            socket.emit("waiting", { message: "Waiting for an Opponenent" });
+        }
+    });
 
     socket.on('joinRoom', (userid) => {
         console.log('user has joined room')
@@ -245,6 +288,12 @@ function removePlayer(socketId: string) {
         }
     }
 }
+
+const matchMakingSystem = new MatchMaking();
+
+
+
+
 
 // function categorizeProblems(dir: string) {
 //     const categories: Categories = {};
