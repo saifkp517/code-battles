@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
+import { CountdownOverlay } from '@/components/animations/Countdown';
+import { GameWinOverlay } from '@/components/animations/GameWinOverlay';
 
 
 const CodeBattleArena = () => {
@@ -189,12 +191,12 @@ fn main() {
   }, [currentProblem, selectedLanguage]);
 
   // Socket connection and event handling
-
-  if (status === "unauthenticated") {
-    redirect("/login");
-  }
-
   useEffect(() => {
+    console.log(status)
+
+    if (status === "unauthenticated") {
+      redirect("/login");
+    }
 
     if (!session?.token) {
       return;
@@ -242,14 +244,16 @@ fn main() {
 
       socketRef.current.on("connect", handleConnect)
 
+      socketRef.current.on("gameOver", (data) => {
+        alert(`${data.message}`);
+      })
 
       socketRef.current.on("disconnect", () => {
-        console.log("User disconnected");
+        console.log("User Disconnected");
       });
 
-
-
-
+      
+      
       return () => {
         if (socketRef.current) {
           socketRef.current.off("connect");
@@ -261,72 +265,8 @@ fn main() {
     }
   }, [session?.token]);
 
-
-  // useEffect(() => {
-  //   if (!socket || !session?.user?.id || joinedRoom.current) return;
-
-  //   const handleConnect = () => {
-
-
-
-  //     setSocketId(socket.id || "");
-  //     if (session?.user?.id) {
-  //       socket.emit('joinRoom', session?.user?.id);
-  //       joinedRoom.current = true;
-  //     }
-  //   };
-
-  //   const handleOpponentCode = ({ code, from }) => {
-  //     if (from === socket.id) {
-  //       setYourCode(code); // It's your code
-  //     } else {
-  //       setOpponentCode(code); // It's opponent's code
-  //     }
-  //   };
-
-  //   const handleMessage = ({ message, from, timestamp }) => {
-  //     setMessages(prev => [
-  //       ...prev,
-  //       { text: message, isFromYou: from === socket.id, timestamp }
-  //     ]);
-  //   };
-
-  //   if (socket.connected) {
-  //     handleConnect(); // Handle immediately if already connected
-  //   }
-
-  //   socket.on('connect', handleConnect);
-  //   socket.on('opponentCode', handleOpponentCode);
-  //   socket.on('chatMessage', handleMessage);
-
-
-  //   return () => {
-  //     socket.off('connect', handleConnect);
-  //     socket.off('opponentCode', handleOpponentCode);
-  //     socket.off('chatMessage', handleMessage);
-  //     socket.off('roomAssigned');
-  //   };
-  // }, [session?.user?.id]);
-
-  // Auto scroll chat to bottom when new messages arrive
-  // useEffect(() => {
-  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  // }, [messages]);
-
+  
   // Timer setup
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prevTime => {
-        if (prevTime <= 0) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prevTime - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   // Send code updates to opponent
   const handleCodeChange = (newCode: string) => {
@@ -442,10 +382,10 @@ fn main() {
               </Select>
             </div>
 
-            <div className="flex items-center space-x-2">
+            {/* <div className="flex items-center space-x-2">
               <Clock className="w-5 h-5 text-slate-400" />
               <span className="text-xl font-mono font-bold text-white">{formatTime(timeLeft)}</span>
-            </div>
+            </div> */}
 
             <Button
               variant="outline"
@@ -656,7 +596,16 @@ fn main() {
         </div>
       )}
 
+      {/* <CountdownOverlay
+        isVisible={true}
+        onComplete={() => {}}
+      /> */}
 
+      {/* <GameWinOverlay
+        isVisible={true}
+        onComplete={() => {}}
+        finalScore={54}
+      /> */}
 
     </div>
   );

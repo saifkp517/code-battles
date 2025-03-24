@@ -14,9 +14,6 @@ export const authOptions = {
             },
             async authorize(credentials) {
                 try {
-
-                    console.log("URL: ", process.env.BACKEND_URL)
-
                     const res = await axios.post(`${process.env.BACKEND_URL}/auth/login`, {
                         email: credentials.email,
                         password: credentials.password,
@@ -58,7 +55,7 @@ export const authOptions = {
 
                     return true; // Allow login
                 } catch (error) {
-                    console.error("Error storing Google user:", error);
+                    console.error("Error storing Google user:");
                     return false; // Deny login if error occurs
                 }
             }

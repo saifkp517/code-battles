@@ -139,35 +139,43 @@ class MatchMaking {
         this.eloHeaps.get(range)!.insert(player);
     }
 
-    findMatch(playerElo: number, eloRange = 50): Player | null {
-        const range = this.getEloRange(playerElo);
-
+    findMatch(player: Player, eloRange = 50): Player | null {
+        const range = this.getEloRange(player.eloRating);
+    
         let bestMatch: Player | null = null;
-
+    
+        const isValidMatch = (match: Player | null) => match && match.userId !== player.userId; // Ensure different users
+    
         // Check the player's range heap first
         if (this.eloHeaps.has(range)) {
             bestMatch = this.eloHeaps.get(range)!.extractMin();
+            if (!isValidMatch(bestMatch)) bestMatch = null;
         }
-
+    
         // If no match, check adjacent ranges (lower & higher ELO brackets)
         if (!bestMatch) {
             if (this.eloHeaps.has(range - 100)) {
                 bestMatch = this.eloHeaps.get(range - 100)!.extractMin();
+                if (!isValidMatch(bestMatch)) bestMatch = null;
             }
             if (!bestMatch && this.eloHeaps.has(range + 100)) {
                 bestMatch = this.eloHeaps.get(range + 100)!.extractMin();
+                if (!isValidMatch(bestMatch)) bestMatch = null;
             }
         }
-
+    
+        // As a last resort, look through all heaps for a valid match
         if (!bestMatch) {
             for (const heap of this.eloHeaps.values()) {
-                if (heap.getSize() > 0) {
+                while (heap.getSize() > 0) {
                     bestMatch = heap.extractMin();
-                    break;
+                    if (isValidMatch(bestMatch)) break;
+                    bestMatch = null; // If invalid, keep searching
                 }
+                if (bestMatch) break;
             }
         }
-
+    
         return bestMatch;
     }
 }
@@ -176,6 +184,7 @@ class MatchMaking {
 const activeRooms: ActiveRooms = {};
 
 async function verifyGoogleToken(idToken: string) {
+    console.log("idToken: "+idToken)
     try {
         const { data } = await axios.get(`https://oauth2.googleapis.com/tokeninfo?access_token=${idToken}`);
         return data; // Contains user details like email, name, picture, etc.
@@ -279,11 +288,21 @@ function findOrCreateRoom(userId: string, socketId: string) {
 
 function removePlayer(socketId: string) {
     for (const roomId in activeRooms) {
+
         activeRooms[roomId].players = activeRooms[roomId].players.filter(
             (player) => player.socketId !== socketId
         );
 
-        if (activeRooms[roomId].players.length === 0) {
+        if(activeRooms[roomId].players.length == 1) {
+            const winner = activeRooms[roomId].players[0];
+            io.to(winner.socketId).emit("gameOver", {
+                winner: winner.userId,
+                message: "Your Opponent has been disconnected. You WIN!"
+            })
+
+            delete activeRooms[roomId];
+            
+        } else if (activeRooms[roomId].players.length === 0) {
             delete activeRooms[roomId]; // Cleanup empty rooms
         }
     }
