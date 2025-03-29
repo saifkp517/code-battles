@@ -221,7 +221,7 @@ fn main() {
       };
 
       const handleConnect = () => {
-        socketRef.current?.emit('findMatch', { userId: session?.user?.email, eloRating: 100 });
+        socketRef.current?.emit('findMatch', { userEmail: session?.user?.email, eloRating: 100 });
 
         socketRef.current?.on("matchFound", () => {
           setMatchFound(true);

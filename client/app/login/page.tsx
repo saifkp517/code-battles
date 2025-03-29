@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Eye, EyeOff, Mail, Lock, Github, Code, Trophy, Zap, Terminal, UserPlus } from "lucide-react";
 
@@ -21,13 +20,13 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useThemeConfig } from "../theme-provider";
 import { getRadiusClass } from "@/lib/theme-config";
-
-import { SessionProvider } from "next-auth/react"
-import { useSession, signIn, signOut } from "next-auth/react";
 import { redirect } from "next/navigation";
+import { loginUser,registerUser } from "@/services/authService";
+import axios from "axios";
 
 export default function LoginPage() {
 
+    const [username, setUsername] = useState("")
     const [email, setEmail] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -37,44 +36,36 @@ export default function LoginPage() {
     const { theme: configTheme } = useThemeConfig();
     const [mounted, setMounted] = useState(false);
     const [leaderboardData, setLeaderboardData] = useState([
-        { name: "CodeNinja", wins: 143, rank: 1 },
-        { name: "AlgoMaster", wins: 137, rank: 2 },
+        { name: "OverclockedMind", wins: 143, rank: 1 },
+        { name: "SegfaultKing", wins: 137, rank: 2 },
         { name: "ByteCrusher", wins: 129, rank: 3 },
     ]);
 
-    const handleSignIn = async (e: React.FormEvent) => {
+    const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError("");
+        setSuccess("");
 
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
         if (isLogin) {
-            const res = await signIn("credentials", { email, password, redirect: false });
 
-            if (res?.error) {
-                console.log(res?.error);
-                setError(res?.error)
+            const result = await loginUser(email, password);
+            if (result.success) {
+                setSuccess("Logging in...");
+                redirect("/");
+            } else {
+                setError(result.message || "Unexpected Error");
             }
-            else window.location.href = "/";
         } else {
-            const res = await fetch(`${process.env.BACKEND_URL}/auth/register`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: "test",
-                    email: email,
-                    password: password
-                }),
-            });
-
-            if (res.ok) setSuccess("Registration successful! You can now log in.");
-            else setError("User already exists or an error occurred.");
+            const result = await registerUser(username!, email, password);
+            if (result.success) {
+                setSuccess(result.message);
+                setIsLogin(true);
+            } else {
+                setError(result.message);
+            }
         }
-        // Handle form submission logic here
     };
 
-    const { data: session, status } = useSession();
 
     useEffect(() => {
         setMounted(true);
@@ -82,12 +73,6 @@ export default function LoginPage() {
 
     if (!mounted) return null; // Ensure consistent hook calls
 
-    if (status === "loading") return <p>Loading....</p>;
-
-    if (session) {
-        redirect("/");
-        return null;
-    }
 
     const radiusClass = getRadiusClass(configTheme.borderRadius);
 
@@ -124,7 +109,7 @@ export default function LoginPage() {
                 <div className="max-w-md space-y-8 text-center z-10">
                     <div>
                         <h1 className="text-5xl font-bold mb-2 text-primary">
-                            <Terminal className="inline-block mr-2 h-8 w-8" /> CodeBattle
+                            <Terminal className="inline-block mr-2 h-8 w-8" /> AlgoArena
                         </h1>
                         <h2 className="text-2xl font-semibold">Problem Solving Battle Royale</h2>
                         <div className="flex justify-center gap-2 mt-3">
@@ -207,18 +192,19 @@ export default function LoginPage() {
                     </CardHeader>
 
                     <CardContent>
-                        <form className="space-y-4" onSubmit={handleSubmit}>
+                        <form className="space-y-4" onSubmit={handleAuth}>
                             {/* Username Field */}
                             <div className="relative">
                                 <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                <Input placeholder="username" type="text" className="pl-10 text-gray-800 border-gray-300" />
+                                <Input onChange={(e) => setEmail(e.target.value)} placeholder="email" type="text" className="pl-10 text-gray-800 border-gray-300" />
                             </div>
 
                             {/* Registration-only fields */}
                             {!isLogin && (
+
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                    <Input placeholder="email" type="text" className="pl-10 text-gray-800 border-gray-300" />
+                                    <Input onChange={(e) => setUsername(e.target.value)} placeholder="username" type="text" className="pl-10 text-gray-800 border-gray-300" />
                                 </div>
                             )}
 
@@ -227,6 +213,7 @@ export default function LoginPage() {
                                 <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                                 <Input
                                     placeholder="password"
+                                    onChange={(e) => setPassword(e.target.value)}
                                     type={showPassword ? "text" : "password"}
                                     className="pl-10 pr-10 text-gray-800 border-gray-300"
                                 />
@@ -269,6 +256,7 @@ export default function LoginPage() {
                             <Button type="submit" className="w-full relative overflow-hidden bg-orange-600 text-white hover:bg-orange-500">
                                 <span className="relative z-10">{isLogin ? "Enter Arena" : "Create Account"}</span>
                             </Button>
+                            {success && <p className="text-gray-600">{success}</p>}
                             {error && <p className="text-gray-600">{error}</p>}
                         </form>
 
@@ -284,7 +272,7 @@ export default function LoginPage() {
 
                         {/* Social Login Buttons */}
                         <div className="grid grid-cols-2 gap-4">
-                            <Button onClick={() => signIn("google", { callbackUrl: "/" })} variant="outline" type="button" className="w-full border-gray-300 text-gray-500 cursor-pointer">
+                            <Button onClick={() => {}} variant="outline" type="button" className="w-full border-gray-300 text-gray-500 cursor-pointer">
                                 <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
                                     <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
                                     <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />

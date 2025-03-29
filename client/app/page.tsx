@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState} from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,20 +10,27 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { redirect } from 'next/navigation';
+import { authorizeUser } from '@/services/authService';
+import axios from 'axios';
 
-import { useSession } from 'next-auth/react';
 
-
-const CodeBattlePlatform = () => {
-  const { data: session, status } = useSession();
+const CodeBattlePlatform =  () => {
   const [activeTab, setActiveTab] = useState('battles');
   const [roomCode, setRoomCode] = useState('');
 
-
-
-  if (status === "unauthenticated") {
-    redirect("/login");
+  
+  async function test() {
+    const res = await authorizeUser();
+    console.log(res.success);
+    if(!res.success) {
+      redirect("/login")
+    }
   }
+
+  test();
+
+
+
   // Demo data
   const upcomingBattles = [
     { id: 1, name: 'Algorithm Showdown', players: 2, difficulty: 'Medium', startTime: '10:30 AM' },
@@ -95,7 +102,7 @@ const CodeBattlePlatform = () => {
   return (
     <div className="flex flex-col w-full max-w-6xl mx-auto p-4 space-y-6">
       {/* Header */}
-      <Navbar username={session?.user?.name} icon={session?.user?.image} eloscore={123} />
+      <Navbar username={"test"} icon={"asd"} eloscore={123} />
 
       {/* Main content */}
       <Tabs defaultValue="battles" onValueChange={setActiveTab} className="w-full">

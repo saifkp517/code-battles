@@ -1,20 +1,22 @@
-import express, { Router } from "express";
-import type { Request, Response, NextFunction } from "express";
+import { Router } from "express";
+import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { PrismaClient } from "@prisma/client";
+import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 
 const prisma = new PrismaClient();
 
 const router = Router();
 
+
 // Register User
 router.post("/register", async (req, res): Promise<void> => {
-    const { name, email, password } = req.body;
+    const { username, email, password } = req.body;
 
     try {
         // Check if user already exists
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        const existingUser = await prisma.user.findUnique({ where: { email } })
         if (existingUser) {
             res.status(400).json({ error: "User already exists" });
             return;
@@ -26,12 +28,14 @@ router.post("/register", async (req, res): Promise<void> => {
         // Create new user
         const newUser = await prisma.user.create({
             data: {
-                name,
+                username,
                 email,
                 password: hashedPassword,
                 provider: "credentials",
             },
         });
+
+        console.log(newUser)
 
         res.status(201).json({ message: "User registered successfully", user: newUser });
     } catch (error) {
@@ -43,11 +47,15 @@ router.post("/register", async (req, res): Promise<void> => {
 // Login User
 router.post("/login", async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
+    console.log(req.cookies);
+
+    const existing_session_id = req.cookies["session_id"];
 
     try {
         // Check if user exists
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
+            console.log("invalid email or password")
             res.status(400).json({ error: "Invalid email or password" });
             return;
         }
@@ -55,20 +63,66 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
         // Compare password
         const isMatch = await bcrypt.compare(password, user.password!);
         if (!isMatch) {
+            console.log("invalid email or password")
             res.status(400).json({ error: "Invalid email or password" });
             return;
         }
 
-        res.json({ user });
+
+        const existing_session = await prisma.session.findUnique({ where: { id: existing_session_id } });
+
+        if (!existing_session) {
+            const session = await prisma.session.create({
+                data: {
+                    userId: user.id,
+                    expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+                }
+            })
+
+            res.cookie("session_id", session.id, {
+                httpOnly: true, // Prevent JavaScript access
+                secure: process.env.NODE_ENV === "production", // Secure in production (HTTPS only)
+                maxAge: 60 * 60 * 1000, // 1 hour expiration
+                path: "/"
+            });
+            res.status(201).json({ message: "Logged In" });
+            return;
+        } else {
+            if (existing_session.expiresAt < new Date()) {
+
+                const delete_session = await prisma.session.delete({ where: { id: existing_session.id } });
+
+                const session = await prisma.session.create({
+                    data: {
+                        userId: user.id,
+                        expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+                    }
+                })
+
+                res.cookie("session_id", session.id, {
+                    httpOnly: true, // Prevent JavaScript access
+                    secure: process.env.NODE_ENV === "production", // Secure in production (HTTPS only)
+                    maxAge: 60 * 60 * 1000, // 1 hour expiration
+                    path: "/"
+                });
+                return;
+            }
+        }
+
+        res.status(201).json({ message: "Logged In" });
+
     } catch (error) {
         console.error("Login error:", error);
         res.status(500).json({ error: "Server error" });
     }
 });
 
-router.post("/google-oauth", async (req: Request, res: Response): Promise<void> => {
+
+
+
+router.post("/oauth/login", async (req: Request, res: Response): Promise<void> => {
     console.log("called")
-    const { name, email } = req.body;
+    const { username, email, image, provider } = req.body;
 
     try {
         let user = await prisma.user.findUnique({ where: { email } });
@@ -76,13 +130,19 @@ router.post("/google-oauth", async (req: Request, res: Response): Promise<void> 
         if (!user) {
             user = await prisma.user.create({
                 data: {
-                    name,
+                    username,
                     email,
+                    image,
                     password: null, // No password for Google users
-                    provider: "google",
+                    provider
                 },
             });
         }
+
+        const newAccessToken = generateAccessToken(user.id);
+        const newRefreshToken = generateRefreshToken(user.id);
+
+
 
         res.status(200).json({ message: "Google OAuth user stored successfully", user });
     } catch (error) {
@@ -91,5 +151,42 @@ router.post("/google-oauth", async (req: Request, res: Response): Promise<void> 
     }
 });
 
+router.get("/authorization", async (req: Request, res: Response): Promise<void> => {
+    try {
+        const sessionId = req.cookies["session_id"];
+
+        if (!sessionId) {
+            res.status(401).json({ message: "Unauthorized: No session ID" });
+            return;
+        }
+
+        const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+        });
+
+        if (!session || new Date() > session.expiresAt) {
+            res.status(401).json({ message: "Session expired, please log in" });
+            return;
+        }
+
+        res.status(200).json({ message: "Session valid", userId: session.userId });
+    } catch (error) {
+        console.error("Authorization error:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+router.post("/logout", async(req: Request, res: Response): Promise<void> => {
+    try {
+        const sessionId = req.cookies["session_id"];
+
+        const delete_session = await prisma.session.delete({ where: { id: sessionId } });
+
+        res.status(200).json({ message: "Logged Out Successfully" });
+    } catch(error) {
+        console.error("Logout Error:", error);
+        res.status(500).json({ error: "Server error" });
+    }
+})
 
 export default router;

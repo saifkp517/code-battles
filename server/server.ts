@@ -5,7 +5,7 @@ import { createServer } from "http"
 import axios from "axios";
 import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
-import jwt from "jsonwebtoken";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import path from "path";
 import router from "./routes/authRoutes";
@@ -32,6 +32,7 @@ app.use(cors({
     credentials: true // Allow cookies and credentials
 }));
 app.use(express.json());
+app.use(cookieParser()); 
 
 //Routes
 app.use("/auth", router);
@@ -183,16 +184,6 @@ class MatchMaking {
 
 const activeRooms: ActiveRooms = {};
 
-async function verifyGoogleToken(idToken: string) {
-    console.log("idToken: "+idToken)
-    try {
-        const { data } = await axios.get(`https://oauth2.googleapis.com/tokeninfo?access_token=${idToken}`);
-        return data; // Contains user details like email, name, picture, etc.
-    } catch (error) {
-        console.error("Invalid Google token", error);
-        throw new Error("Invalid token");
-    }
-}
 
 
 io.use(async (socket: AuthenticatedSocket, next) => {

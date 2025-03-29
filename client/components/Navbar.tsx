@@ -2,7 +2,9 @@ import { Code, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@radix-ui/react-avatar";
-import { signOut } from "next-auth/react";
+import { logOutUser } from "@/services/authService";
+import { redirect } from "next/navigation";
+
 
 interface NavProps {
     username: string | null | undefined;
@@ -11,7 +13,8 @@ interface NavProps {
 }
 
 function handleLogout() {
-    return signOut()
+    logOutUser();
+    redirect("/login");
 }
 
 export default function Navbar({ username, icon, eloscore }: NavProps) {
@@ -24,7 +27,7 @@ export default function Navbar({ username, icon, eloscore }: NavProps) {
         <div className="flex items-center gap-4">
             <Avatar className="w-10 h-10 rounded-full overflow-hidden">
                 <AvatarImage
-                    src={icon || "https://github.com/shadcn.png"}
+                    src={icon?.startsWith("https") || "https://github.com/shadcn.png"}
                     alt="@shadcn"
                     className="object-cover w-full h-full"
                 />

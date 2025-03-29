@@ -1,11 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native"]
 }
 
@@ -15,11 +9,37 @@ datasource db {
 }
 
 model User {
-  id        String  @id @default(uuid())
-  name      String?
-  email     String  @unique
-  password  String? // Only for credential-based users
-  image     String?
-  provider  String
-  createdAt DateTime @default(now())
+  id               String         @id @default(uuid())
+  username         String?
+  email            String         @unique
+  password         String?
+  image            String?
+  provider         String
+  createdAt        DateTime       @default(now())
+  matchesAsPlayer1 MatchHistory[] @relation("Player1Relation")
+  matchesAsPlayer2 MatchHistory[] @relation("Player2Relation")
+  matchesWon       MatchHistory[] @relation("WinnerRelation")
+  sessions         Session[]
+}
+
+model MatchHistory {
+  id           String   @id @default(uuid())
+  player1Email String
+  player2Email String
+  winnerEmail  String?
+  matchDate    DateTime @default(now())
+  duration     Int
+  score1       Int
+  score2       Int
+  createdAt    DateTime @default(now())
+  player1      User     @relation("Player1Relation", fields: [player1Email], references: [email])
+  player2      User     @relation("Player2Relation", fields: [player2Email], references: [email])
+  winner       User?    @relation("WinnerRelation", fields: [winnerEmail], references: [email])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  expiresAt    DateTime
+  user         User     @relation(fields: [userId], references: [id])
 }
