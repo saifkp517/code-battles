@@ -9,6 +9,29 @@ const prisma = new PrismaClient();
 
 const router = Router();
 
+export async function authorizeSession(sessionId: string | null): Promise<{ userId: string } | null> {
+    try {
+        if (!sessionId) {
+            return null;
+        }
+
+        const session = await prisma.session.findUnique({
+            where: { id: sessionId },
+        });
+
+        if (!session) {
+            console.log("invalid session");
+            return null;
+        }
+
+        return { userId: session.userId };
+    } catch (error) {
+        console.error("Authorization error:", error);
+        return null;
+    }
+}
+
+
 
 // Register User
 router.post("/register", async (req, res): Promise<void> => {
@@ -47,9 +70,9 @@ router.post("/register", async (req, res): Promise<void> => {
 // Login User
 router.post("/login", async (req: Request, res: Response): Promise<void> => {
     const { email, password } = req.body;
-    console.log(req.cookies);
 
     const existing_session_id = req.cookies["session_id"];
+
 
     try {
         // Check if user exists
@@ -68,10 +91,7 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-
-        const existing_session = await prisma.session.findUnique({ where: { id: existing_session_id } });
-
-        if (!existing_session) {
+        if (!existing_session_id) {
             const session = await prisma.session.create({
                 data: {
                     userId: user.id,
@@ -88,10 +108,9 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
             res.status(201).json({ message: "Logged In" });
             return;
         } else {
-            if (existing_session.expiresAt < new Date()) {
+            const existing_session = await prisma.session.findUnique({ where: { id: existing_session_id } });
 
-                const delete_session = await prisma.session.delete({ where: { id: existing_session.id } });
-
+            if (!existing_session) {
                 const session = await prisma.session.create({
                     data: {
                         userId: user.id,
@@ -105,9 +124,33 @@ router.post("/login", async (req: Request, res: Response): Promise<void> => {
                     maxAge: 60 * 60 * 1000, // 1 hour expiration
                     path: "/"
                 });
+                res.status(201).json({ message: "Logged In" });
                 return;
+            } else {
+                if (existing_session.expiresAt < new Date()) {
+
+                    const delete_session = await prisma.session.delete({ where: { id: existing_session.id } });
+
+                    const session = await prisma.session.create({
+                        data: {
+                            userId: user.id,
+                            expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+                        }
+                    })
+
+                    res.cookie("session_id", session.id, {
+                        httpOnly: true, // Prevent JavaScript access
+                        secure: process.env.NODE_ENV === "production", // Secure in production (HTTPS only)
+                        maxAge: 60 * 60 * 1000, // 1 hour expiration
+                        path: "/"
+                    });
+                    return;
+                }
             }
         }
+
+
+
 
         res.status(201).json({ message: "Logged In" });
 
@@ -151,42 +194,61 @@ router.post("/oauth/login", async (req: Request, res: Response): Promise<void> =
     }
 });
 
-router.get("/authorization", async (req: Request, res: Response): Promise<void> => {
+
+router.post("/logout", async (req: Request, res: Response): Promise<void> => {
     try {
         const sessionId = req.cookies["session_id"];
+        if (sessionId) {
+            const delete_session = await prisma.session.findUnique({ where: { id: sessionId } });
 
-        if (!sessionId) {
-            res.status(401).json({ message: "Unauthorized: No session ID" });
-            return;
+            if (delete_session) {
+                await prisma.session.delete({ where: { id: sessionId } });
+            }
+
+            res.clearCookie('session_id');
+            res.status(200).json({ message: "Logged Out Successfully" });
         }
-
-        const session = await prisma.session.findUnique({
-            where: { id: sessionId },
-        });
-
-        if (!session || new Date() > session.expiresAt) {
-            res.status(401).json({ message: "Session expired, please log in" });
-            return;
-        }
-
-        res.status(200).json({ message: "Session valid", userId: session.userId });
     } catch (error) {
-        console.error("Authorization error:", error);
-        res.status(500).json({ message: "Internal server error" });
-    }
-});
-
-router.post("/logout", async(req: Request, res: Response): Promise<void> => {
-    try {
-        const sessionId = req.cookies["session_id"];
-
-        const delete_session = await prisma.session.delete({ where: { id: sessionId } });
-
-        res.status(200).json({ message: "Logged Out Successfully" });
-    } catch(error) {
         console.error("Logout Error:", error);
         res.status(500).json({ error: "Server error" });
     }
+})
+
+router.get("/me", async (req: Request, res: Response): Promise<void> => {
+    const session_id = req.cookies["session_id"];
+
+    try {
+        if (session_id) {
+
+            const session = await prisma.session.findUnique({
+                where: {
+                    id: session_id,
+                    expiresAt: { gt: new Date() }
+                }
+            });
+
+            if (session) {
+                const user_details = await prisma.user.findUnique({ where: { id: session?.userId } });
+
+                res.status(200).json({
+                    username: user_details?.username,
+                    email: user_details?.email,
+                    id: user_details?.id,
+                    image: user_details?.image
+                });
+                return;
+            }
+        }
+
+        res.status(400).json({ error: "Session Id is invalid or expired" });
+        return;
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Server Error" });
+        return;
+    }
+
+
 })
 
 export default router;

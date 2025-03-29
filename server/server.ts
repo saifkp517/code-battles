@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid"
 import fs from "fs";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import { authorizeSession } from "./routes/authRoutes";
 import path from "path";
 import router from "./routes/authRoutes";
 
@@ -20,7 +21,8 @@ const app = express();
 const httpServer = createServer(app)
 const io = new Server(httpServer, {
     cors: {
-        origin: "http://localhost:3000"
+        origin: "http://localhost:3000",
+        credentials: true
     }
 })
 
@@ -187,15 +189,19 @@ const activeRooms: ActiveRooms = {};
 
 
 io.use(async (socket: AuthenticatedSocket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token) {
+    const cookieString = socket.request.headers.cookie;;
+    if (!cookieString) {
         console.log("Authentication Error")
         return next(new Error("Authentication Error"));
     }
 
     try {
-        const user = await verifyGoogleToken(token);
-        socket.user = user
+        
+        const match = cookieString.match(/session_id=([^;]+)/);
+        const session_id = match ? match[1] : null;
+
+        const user = await authorizeSession(session_id);
+        socket.user = user;
         next();
     } catch (err) {
         console.log("invalid token")
@@ -204,8 +210,6 @@ io.use(async (socket: AuthenticatedSocket, next) => {
 })
 
 io.on('connection', (socket: AuthenticatedSocket) => {
-    ``
-    console.log(`User ${JSON.stringify(socket.user, null, 2)} connected`);
 
     socket.on("findMatch", (playerData) => {
         const { userId, eloRating } = playerData;
@@ -214,7 +218,7 @@ io.on('connection', (socket: AuthenticatedSocket) => {
 
         console.log(`Player ${userId} search for a match....`);
 
-        const opponent = matchMakingSystem.findMatch(player.eloRating);
+        const opponent = matchMakingSystem.findMatch(player);
 
         if (opponent) {
             console.log(`Match found: ${player.userId} vs ${opponent.userId}`);
