@@ -2,8 +2,8 @@ import { Code, Trophy } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@radix-ui/react-avatar";
-import { logOutUser } from "@/services/authService";
 import { redirect } from "next/navigation";
+import { useAuth } from "@/app/utils/AuthContext";
 
 
 interface NavProps {
@@ -12,12 +12,15 @@ interface NavProps {
     eloscore: number;
 }
 
-function handleLogout() {
-    logOutUser();
-    redirect("/login");
-}
-
 export default function Navbar({ username, icon, eloscore }: NavProps) {
+
+    const {logOutUser} = useAuth();
+
+    async function handleLogout() {
+        await logOutUser();
+        redirect("/login")
+    }
+
     return (
         <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState} from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,27 +9,27 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
 import Navbar from '@/components/Navbar';
-import { redirect } from 'next/navigation';
-import { authorizeUser } from '@/services/authService';
-import axios from 'axios';
+import { redirect, useRouter } from 'next/navigation';
+import { useAuth } from './utils/AuthContext';
 
 
-const CodeBattlePlatform =  () => {
+const CodeBattlePlatform = () => {
+
+  const { user, loading, loggedIn } = useAuth();
+  const [username, setUsername] = useState("");
+
   const [activeTab, setActiveTab] = useState('battles');
   const [roomCode, setRoomCode] = useState('');
+  const router = useRouter()
 
-  
-  async function test() {
-    const res = await authorizeUser();
-    console.log(res.success);
-    if(!res.success) {
+  useEffect(() => {
+    console.log(loading, loggedIn)
+    if(loading == false && loggedIn == false) {
       redirect("/login")
-    }
-  }
+    } 
+    setUsername(user?.username)
 
-  test();
-
-
+  }, [user])
 
   // Demo data
   const upcomingBattles = [
@@ -142,7 +142,7 @@ const CodeBattlePlatform =  () => {
                     />
                     <Button
                       onClick={(e) => {
-                        window.location.href = `/battle?userId=${session?.user!.name}&elo=${100}`
+                        window.location.href = `/battle?userName=${username}&elo=${100}`
                       }}
                     >
                       Join

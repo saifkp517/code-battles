@@ -12,8 +12,8 @@ import CodeExecutor from '../utils/codeExecutor';
 import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
+import { useAuth } from '../utils/AuthContext';
 import { CountdownOverlay } from '@/components/animations/Countdown';
 import { GameWinOverlay } from '@/components/animations/GameWinOverlay';
 
@@ -75,10 +75,10 @@ const CodeBattleArena = () => {
     { id: 78, name: 'Rust', extension: 'rs' },
   ];
 
-  const { data: session, status } = useSession();
+
 
   // State variables
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes in seconds
+  const {user, loading, fetchUser} = useAuth();
   const [yourStatus, setYourStatus] = useState('coding');
   const [roomId, setRoomId] = useState('');
   const [opponentStatus, setOpponentStatus] = useState('coding');
@@ -192,78 +192,71 @@ fn main() {
 
   // Socket connection and event handling
   useEffect(() => {
-    console.log(status)
 
-    if (status === "unauthenticated") {
-      redirect("/login");
-    }
+    async function handlePlayer() {
 
-    if (!session?.token) {
-      return;
-    }
-
-    if (!socketRef.current) {
-      console.log(session.token)
-      socketRef.current = io("http://localhost:4000", {
-        auth: {
-          token: session.token, // No more TypeScript errors
-        },
-        autoConnect: false,
-      });
-
-
-      const handleOpponentCode = ({ code, from }) => {
-        if (socketRef.current && from === socketRef.current.id) {
-          setYourCode(code); // It's your code
-        } else {
-          setOpponentCode(code); // It's opponent's code
-        }
-      };
-
-      const handleConnect = () => {
-        socketRef.current?.emit('findMatch', { userEmail: session?.user?.email, eloRating: 100 });
-
-        socketRef.current?.on("matchFound", () => {
-          setMatchFound(true);
-
-          socketRef.current?.emit('joinRoom', session?.user?.email);
-
-          socketRef.current?.on('roomAssigned', ({ roomId }) => {
-            console.log('Assigned to room:', roomId);
-            setRoomId(roomId);
+      if(user !== null) {
+        if (!socketRef.current) {
+          socketRef.current = io("http://localhost:4000", {
+            withCredentials: true
           });
-
-          socketRef.current?.on('opponentCode', handleOpponentCode);
-        });
-
-
-      }
-
-
-      socketRef.current.connect();
-
-      socketRef.current.on("connect", handleConnect)
-
-      socketRef.current.on("gameOver", (data) => {
-        alert(`${data.message}`);
-      })
-
-      socketRef.current.on("disconnect", () => {
-        console.log("User Disconnected");
-      });
-
-      
-      
-      return () => {
-        if (socketRef.current) {
-          socketRef.current.off("connect");
-          socketRef.current.off("disconnect");
-          socketRef.current.disconnect();
-          socketRef.current = null;
+    
+          const handleOpponentCode = ({ code, from }) => {
+            if (socketRef.current && from === socketRef.current.id) {
+              setYourCode(code); // It's your code
+            } else {
+              setOpponentCode(code); // It's opponent's code
+            }
+          };
+    
+          const handleConnect = () => {
+            socketRef.current?.emit('findMatch', { userId: user.id, eloRating: 100 });
+    
+            socketRef.current?.on("matchFound", () => {
+              setMatchFound(true);
+    
+              socketRef.current?.emit('joinRoom', user.username);
+    
+              socketRef.current?.on('roomAssigned', ({ roomId }) => {
+                console.log('Assigned to room:', roomId);
+                setRoomId(roomId);
+              });
+    
+              socketRef.current?.on('opponentCode', handleOpponentCode);
+            });
+    
+    
+          }
+    
+    
+          socketRef.current.connect();
+    
+          socketRef.current.on("connect", handleConnect)
+    
+          socketRef.current.on("gameOver", (data) => {
+            alert(`${data.message}`);
+          })
+    
+          socketRef.current.on("disconnect", () => {
+            console.log("User Disconnected");
+          });
+    
+          
+          
+          return () => {
+            if (socketRef.current) {
+              socketRef.current.off("connect");
+              socketRef.current.off("disconnect");
+              socketRef.current.disconnect();
+              socketRef.current = null;
+            }
+          };
         }
-      };
+      }
     }
-  }, [session?.token]);
+    handlePlayer();
+   
+  }, [user]);
 
   
   // Timer setup

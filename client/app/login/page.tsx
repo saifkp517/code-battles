@@ -21,11 +21,12 @@ import { Badge } from "@/components/ui/badge";
 import { useThemeConfig } from "../theme-provider";
 import { getRadiusClass } from "@/lib/theme-config";
 import { redirect } from "next/navigation";
-import { loginUser,registerUser } from "@/services/authService";
+import { useAuth } from "../utils/AuthContext";
 import axios from "axios";
 
 export default function LoginPage() {
 
+    const {user, loginUser, registerUser} = useAuth();
     const [username, setUsername] = useState("")
     const [email, setEmail] = useState("");
     const [error, setError] = useState("");
@@ -40,6 +41,10 @@ export default function LoginPage() {
         { name: "SegfaultKing", wins: 137, rank: 2 },
         { name: "ByteCrusher", wins: 129, rank: 3 },
     ]);
+
+    useEffect(() => {
+        console.log(user)
+    })
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
