@@ -30,6 +30,22 @@ interface user_type {
   username: string;
 }
 
+
+
+import { cn } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+
+const LoadingSpinner = ({ className }: any) => {
+  return (
+    <div className={cn("flex items-center justify-center h-full", className)}>
+      <Loader2 className="w-10 h-10 animate-spin text-primary" />
+    </div>
+  );
+};
+
+export default LoadingSpinner;
+
+
 // Create Context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -78,7 +94,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log(res);
       return { success: true };
     } catch (error: any) {
-      console.log(error);
+      console.log("fetchUserDetails Error: " + error);
       return { success: false, message: "Error detching details" };
     }
   }
@@ -86,7 +102,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logOutUser = async () => {
     try {
       const res = await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
-      
+
 
 
       setLoggedIn(false);
@@ -105,11 +121,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchUser = async () => {
     try {
       const res = await axios.get(`${API_URL}/auth/me`, { withCredentials: true });
-      setUser(res.data);
-      setLoggedIn(true);
+      if (res) {
+        setUser(res.data);
+        setLoggedIn(true);
+      }
     } catch (error) {
       console.error("Error fetching user:", error);
     } finally {
+      console.log("finally")
       setLoading(false);
     }
   };
@@ -132,7 +151,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       fetchUserDetails,
       logOutUser
     }}>
-      {children}
+       {!loading ? children : <LoadingSpinner />}
     </AuthContext.Provider>
   );
 };

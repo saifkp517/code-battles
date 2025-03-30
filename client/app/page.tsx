@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trophy, Users, Timer, Eye, CheckCircle, XCircle, Zap } from 'lucide-react';
-import Navbar from '@/components/Navbar';
+import Navbar from '@/components/custom/navbar/Navbar';
 import { redirect, useRouter } from 'next/navigation';
 import { useAuth } from './utils/AuthContext';
 
