@@ -1,10 +1,13 @@
 'use client'
 import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import Ground from '@/components/game-components/ground/Ground';
+import Enemy from '@/components/game-components/enemy/Enemy';
 import Player from '@/components/game-components/player/Player';
 import * as THREE from 'three';
 import { Stats } from '@react-three/drei';
-import Ground from '@/components/game-components/ground/Ground';
+import socket from '@/lib/socket';
+
 
 // Define types for player and obstacle
 
@@ -69,8 +72,69 @@ const FirstPersonGame: React.FC = () => {
   const obstacles = useRef<THREE.Mesh[]>([]);
   const [colliding, setColliding] = useState(false);
   const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
+  const [enemies, setEnemies] = useState<{ [id: string]: THREE.Vector3 }>({});
+  const [myPosition, setMyPosition] = useState(new THREE.Vector3(0, 0, 0));
   const [gameStarted, setGameStarted] = useState(false);
+  const myId = useRef<string | undefined>(undefined);
 
+  //socket setup
+  useEffect(() => {
+    socket.on("connect", () => {
+      myId.current = socket.id;
+    });
+
+    socket.on("currentPlayers", (players) => {
+      const filtered = Object.entries(players)
+        .filter(([id]) => id !== socket.id)
+        .reduce((acc, [id, pos]) => {
+          acc[id] = new THREE.Vector3(pos.x, pos.y, pos.z);
+          return acc;
+        }, {});
+      setEnemies(filtered);
+    });
+
+    socket.on("newPlayer", ({ id, position }) => {
+      if (id !== socket.id) {
+        setEnemies((prev) => ({
+          ...prev,
+          [id]: new THREE.Vector3(position.x, position.y, position.z),
+        }));
+      }
+    });
+
+    socket.on("playerMoved", ({ id, position }) => {
+      if (id !== socket.id) {
+        setEnemies((prev) => ({
+          ...prev,
+          [id]: new THREE.Vector3(position.x, position.y, position.z),
+        }));
+      }
+    });
+
+    socket.on("playerDisconnected", (id) => {
+      setEnemies((prev) => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+    });
+
+    return () => {
+      socket.off();
+    };
+  }, []);
+
+  // send my position on change
+  useEffect(() => {
+    const interval = setInterval(() => {
+      socket.emit("updatePosition", {
+        x: myPosition.x,
+        y: myPosition.y,
+        z: myPosition.z,
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [myPosition]);
 
   // Setup obstacle references
   useEffect(() => {
@@ -115,10 +179,10 @@ const FirstPersonGame: React.FC = () => {
           y: Math.abs(collisionVector.y),
           z: Math.abs(collisionVector.z),
         };
-        
+
         // Find which component has the largest magnitude
         let maxComponent = Math.max(absVector.x, absVector.y, absVector.z);
-        
+
         // Set the normal based on the dominant axis
         if (maxComponent === absVector.x) {
           collisionNormal.set(Math.sign(collisionVector.x), 0, 0);
@@ -172,10 +236,14 @@ const FirstPersonGame: React.FC = () => {
         <gridHelper args={[50, 50]} />
 
         <Player
+          setPosition={setMyPosition}
           onCollision={checkCollisions}
           colliding={colliding}
           collisionNormal={collisionNormal || new THREE.Vector3(0, 0, 0)}
         />
+        {Object.entries(enemies).map(([id, pos]) => (
+          <Enemy key={id} position={pos} />
+        ))}
 
         {/* Obstacles positioned around the scene */}
         <Obstacle position={[5, 1, 0]} ref={addObstacleRef} />

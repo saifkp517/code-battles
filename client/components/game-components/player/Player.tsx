@@ -9,6 +9,7 @@ interface PlayerProps {
     onCollision: (playerPosition: THREE.Vector3, playerDirection: THREE.Vector3) => void;
     colliding: boolean;
     collisionNormal: THREE.Vector3;
+    setPosition: any
 }
 
 type FireballProps = {
@@ -69,7 +70,7 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
 };
 
 
-const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal }) => {
+const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal, setPosition }) => {
     const { camera } = useThree();
     const playerRef = useRef<THREE.Mesh>(null);
     const isOnGround = useRef(false);
@@ -279,7 +280,7 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
             velocity.current.y = 0;
         }
 
-
+        setPosition(playerPosition.clone());
 
         onCollision(playerPosition, cameraDirection);
     });
