@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import Player from '@/components/game-components/player/Player';
 import * as THREE from 'three';
+import { Stats } from '@react-three/drei';
 import Ground from '@/components/game-components/ground/Ground';
 
 // Define types for player and obstacle
@@ -15,6 +16,7 @@ interface ObstacleProps {
 
 
 const Fireball = ({ startPosition, targetPosition, onExplode }: any) => {
+
   const fireballRef = useRef<THREE.Mesh>(null);
   const [time, setTime] = useState(0);
 
@@ -84,7 +86,7 @@ const FirstPersonGame: React.FC = () => {
 
 
   // Check for collisions with all obstacles
-  const checkCollisions = (playerPosition: THREE.Vector3, playerDirection: THREE.Vector3) => {
+  const checkCollisions = (playerPosition: THREE.Vector3) => {
     // Create player hitbox
     const playerBox = new THREE.Box3().setFromCenterAndSize(
       playerPosition,
@@ -97,7 +99,9 @@ const FirstPersonGame: React.FC = () => {
       if (!obstacle) continue;
 
       const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+
       if (playerBox.intersectsBox(obstacleBox)) {
+        //sliding collision algorithm(to get collision normal)
         let collisionNormal = new THREE.Vector3(0, 0, 0);
         let playerCenter = new THREE.Vector3();
         playerBox.getCenter(playerCenter);
@@ -106,12 +110,27 @@ const FirstPersonGame: React.FC = () => {
         obstacleBox.getCenter(obstacleCenter);
 
         let collisionVector = playerCenter.clone().sub(obstacleCenter);
-        if (Math.abs(collisionVector.x) > Math.abs(collisionVector.z)) {
-          collisionNormal.set(Math.sign(collisionVector.x), 0, 0); // Collision on X-axis
+        let absVector = {
+          x: Math.abs(collisionVector.x),
+          y: Math.abs(collisionVector.y),
+          z: Math.abs(collisionVector.z),
+        };
+        
+        // Find which component has the largest magnitude
+        let maxComponent = Math.max(absVector.x, absVector.y, absVector.z);
+        
+        // Set the normal based on the dominant axis
+        if (maxComponent === absVector.x) {
+          collisionNormal.set(Math.sign(collisionVector.x), 0, 0);
+        } else if (maxComponent === absVector.y) {
+          collisionNormal.set(0, Math.sign(collisionVector.y), 0);
         } else {
-          collisionNormal.set(0, 0, Math.sign(collisionVector.z)); // Collision on Z-axis
+          collisionNormal.set(0, 0, Math.sign(collisionVector.z));
         }
         setCollisionNormal(collisionNormal)
+        //sliding collision algorithm(to get collision normal)
+
+
         isColliding = true
         break;
       }
@@ -119,6 +138,8 @@ const FirstPersonGame: React.FC = () => {
 
     setColliding(isColliding);
   };
+
+  const playerRef = useRef<THREE.Vector3>(null); // for storing latest position if needed
 
 
   return (
@@ -138,15 +159,14 @@ const FirstPersonGame: React.FC = () => {
         </div>
       ) : null} */}
 
-      <div className="absolute top-4 left-4 bg-white text-black p-2 z-10">
-        <h2 className="text-lg font-bold">
-          Status: {colliding ? "Collision Detected!" : "No Collision"}
-        </h2>
+      {/* Instructions */}
+      {/* <div className="absolute top-4 left-4 bg-white text-black p-2 z-10">
         <p>WASD to move, Mouse to look</p>
         <p className="text-sm">Press ESC to release mouse</p>
-      </div>
+      </div> */}
 
       <Canvas camera={{ position: [0, 1.6, 0], fov: 75 }}>
+        <Stats />
         <ambientLight intensity={0.5} />
         <pointLight position={[10, 10, 10]} intensity={1} />
         <gridHelper args={[50, 50]} />

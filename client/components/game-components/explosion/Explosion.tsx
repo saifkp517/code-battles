@@ -112,7 +112,7 @@ const Explosion: React.FC<{ position: THREE.Vector3 }> = ({ position }) => {
     <group>
       {/* Core explosion */}
       <mesh position={position}>
-        <sphereGeometry args={[1.5, 16, 16]} />
+        <sphereGeometry args={[15, 16, 16]} />
         <meshStandardMaterial 
           color="#ff5500" 
           emissive="#ff3300"

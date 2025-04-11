@@ -22,23 +22,27 @@ type FireballProps = {
 const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obstacles = [], onExplode }) => {
     const fireballRef = useRef<THREE.Mesh>(null);
     const startTime = useRef<number>(Date.now());
-    const velocity = direction.clone().normalize().multiplyScalar(speed);
 
-    const gravity = 9.8; // Gravity constant (adjust for desired arc height)
-    const initialYVelocity = 5;
+    const gravity = 9.8 / 4; // Gravity constant (adjust for desired arc height)
+
+
 
     useFrame(() => {
         if (!fireballRef.current) return;
 
         const elapsedTime = (Date.now() - startTime.current) / 1000;
 
-        // Elliptical motion formula
-        fireballRef.current.position.x += velocity.x;
-        fireballRef.current.position.z += velocity.z;
+        const initialPosition = fireballRef.current.position.clone();
+        const initialVelocity = direction.clone().multiplyScalar(speed);
 
-        fireballRef.current.position.y = velocity.y + 1 +
-            (initialYVelocity * elapsedTime) -
-            (gravity * elapsedTime * elapsedTime);
+        // x and z are linear motion
+        fireballRef.current.position.x = initialPosition.x + initialVelocity.x * elapsedTime;
+        fireballRef.current.position.z = initialPosition.z + initialVelocity.z * elapsedTime;
+
+        // y is affected by gravity (parabolic arc)
+        fireballRef.current.position.y = initialPosition.y +
+            initialVelocity.y * elapsedTime -
+            0.5 * gravity * elapsedTime * elapsedTime;
 
         // Collision detection with ground and obstacles
         const fireballPosition = fireballRef.current.position.clone();
@@ -68,7 +72,8 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
 const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal }) => {
     const { camera } = useThree();
     const playerRef = useRef<THREE.Mesh>(null);
-    const [isJumping, setIsJumping] = useState(false);
+    const isOnGround = useRef(false);
+    const isJumpingRef = useRef(false);
     const [fireballs, setFireballs] = useState<{ id: number; position: THREE.Vector3; direction: THREE.Vector3 }[]>([]);
     const [explosions, setExplosions] = useState<{ id: number; position: THREE.Vector3 }[]>([]);
 
@@ -79,7 +84,6 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
 
         const cameraDirection = new THREE.Vector3();
         camera.getWorldDirection(cameraDirection);
-        console.log(cameraDirection)
         const newFireball = {
             id: Date.now(),
             position: startPosition, // Player's position
@@ -100,9 +104,9 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
     };
 
     const gravity = -9.8 * 2;
-    const jumpStrength = 5;
+    const jumpStrength = 10;
 
-    const speed = 20;
+    const playerSpeed = 5;
 
     const controlsRef = useRef<any>(null);
 
@@ -127,9 +131,10 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
                 case 'KeyA': setMoveState(prev => ({ ...prev, left: true })); break;
                 case 'KeyD': setMoveState(prev => ({ ...prev, right: true })); break;
                 case 'Space':
-                    if (!isJumping) {
+                    // if (!isJumpingRef.current && camera.position.y <= 1.05) {
+                    if (!isJumpingRef.current) {
                         velocity.current.y = jumpStrength;
-                        setIsJumping(true);
+                        isJumpingRef.current = true;
                     }
                     break;
             }
@@ -142,9 +147,8 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
                 case 'KeyA': setMoveState(prev => ({ ...prev, left: false })); break;
                 case 'KeyD': setMoveState(prev => ({ ...prev, right: false })); break;
                 case 'Space':
-                    if (!isJumping) {
-                        velocity.current.y = jumpStrength;
-                        setIsJumping(true);
+                    if (isJumpingRef.current) {
+                        isJumpingRef.current = false;
                     }
                     break;
             }
@@ -161,20 +165,17 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
         };
     }, []);
 
-    const previousPosition = useRef<THREE.Vector3>(new THREE.Vector3());
 
     // Move player based on keyboard input and check collisions
     useFrame((_, delta) => {
         if (!controlsRef.current?.isLocked) return;
 
-        previousPosition.current.copy(camera.position);
+        let isGrounded = false;
+
 
         if (playerRef.current) {
             playerRef.current.position.copy(camera.position);
         }
-
-
-        const currentPosition = camera.position.clone();
 
         // Calculate movement direction based on camera orientation
         direction.current.z = Number(moveState.forward) - Number(moveState.backward);
@@ -184,9 +185,14 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
         // Apply movement in the camera direction
         const frontVector = new THREE.Vector3(0, 0, Number(moveState.forward) - Number(moveState.backward));
         const sideVector = new THREE.Vector3(Number(moveState.left) - Number(moveState.right), 0, 0);
+        const horizontalMove = frontVector.add(sideVector).normalize().multiplyScalar(playerSpeed * delta);
 
         // Combine and normalize movement vector
-        const moveVector = frontVector.add(sideVector).normalize().multiplyScalar(speed * delta);
+        const moveVector = new THREE.Vector3(
+            horizontalMove.x,
+            velocity.current.y * delta, // Vertical movement from gravity
+            horizontalMove.z
+        );
 
         // Get camera direction (excluding y-axis)
         const cameraDirection = new THREE.Vector3();
@@ -194,56 +200,87 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
         cameraDirection.y = 0;
         cameraDirection.normalize();
 
+
         // Calculate movement in camera space
         const moveQuat = new THREE.Quaternion();
         moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
         moveVector.applyQuaternion(moveQuat);
 
-        // Update camera position
+        const playerPosition = camera.position.clone();
+
+        // Step 2: Apply movement
         camera.position.add(moveVector);
 
+        if (colliding) {
+            const normal = collisionNormal.clone().normalize();
+
+            // Restore previous position
+            camera.position.copy(playerPosition);
+
+            const isOnTop = normal.y > 0.7;
+
+            if (isOnTop) {
+                if(isJumpingRef.current) velocity.current.y = jumpStrength;
+                else velocity.current.y = 0;
+                isGrounded = true;
+
+                // Get the horizontal movement in camera space
+                const cameraDirection = new THREE.Vector3();
+                camera.getWorldDirection(cameraDirection);
+                cameraDirection.y = 0;
+                cameraDirection.normalize();
+
+                const moveQuat = new THREE.Quaternion();
+                moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
+
+                // Apply full horizontal movement without restriction
+                const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
+                camera.position.x += horizontalMoveWorld.x;
+                camera.position.z += horizontalMoveWorld.z;
+
+            } else {
+                // Wall collision (not on top)
+
+                // Check if player is trying to move away from the wall
+                const movingAwayFromWall = moveVector.dot(normal) > 0;
+
+                if (movingAwayFromWall) {
+                    // Allow movement away from the wall
+                    camera.position.copy(playerPosition);
+                    camera.position.add(moveVector);
+                } else {
+                    // Apply sliding behavior for movement into the wall
+                    const slideVector = moveVector.clone().projectOnPlane(normal);
+
+                    // Push slightly away from the wall to prevent getting stuck
+                    const pushDistance = 0.001;
+
+                    // Apply both the push and the slide
+                    camera.position.copy(playerPosition); // Reset to pre-collision position
+                    camera.position.addScaledVector(normal, pushDistance); // Push away from wall
+                    camera.position.add(slideVector); // Slide along the wall
+                }
+            }
+        }
+
+
         // Apply gravity
-        velocity.current.y += gravity * delta;
+
+        if (!isGrounded) {
+            velocity.current.y += gravity * delta;
+        }
         camera.position.y += velocity.current.y * delta;
+
 
         // Prevent falling below ground (y = 1 is ground level)
         if (camera.position.y < 1) {
+            isJumpingRef.current = false;
             camera.position.y = 1;
             velocity.current.y = 0;
-            setIsJumping(false);
         }
 
-        // Create player "body" at camera position (slightly lower)
-        const playerPosition = camera.position.clone();
-        playerPosition.y -= 1; // Player body is below camera (eye level)
 
-        // If collision detected, revert to previous position COMPLETELY
-        if (colliding) {
-            // Revert to previous position first
-            camera.position.copy(currentPosition);
 
-            // Make sure collisionNormal is normalized
-            const normal = collisionNormal.clone().normalize();
-            const pushDistance = 0.001; // Very small value
-            camera.position.addScaledVector(normal, pushDistance);
-
-            // Calculate how much of the movement is in the direction of the collision
-            const dotProduct = moveVector.dot(normal);
-
-            // Only remove the component in the direction of the collision
-            // This creates a sliding effect along the surface
-            if (dotProduct < 0) {
-                // Create the sliding vector by removing the collision component
-                const slide = moveVector.clone().addScaledVector(normal, -dotProduct);
-
-                // Apply the sliding movement
-                camera.position.add(slide)
-
-                // Double-check that this new position doesn't cause another collision
-                // If it does, you might need to simply revert to the original position
-                // This part depends on your collision detection system
-            }
-        }
         onCollision(playerPosition, cameraDirection);
     });
 
@@ -264,10 +301,15 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
                 <Explosion key={explosion.id} position={explosion.position} />
             ))}
             <group ref={playerRef} position={camera.position}>
-                {/* Player hitbox - invisible but used for collision detection */}
+                {/* Collision box */}
                 <mesh visible={false} position={[0, -1, 0]}>
-
                     <boxGeometry args={[1, 2, 1]} />
+                </mesh>
+
+                {/* Visible player mesh */}
+                <mesh position={[0, -1, 0]}>
+                    {/* <capsuleGeometry args={[0.5, 1, 8, 16]} /> */}
+                    <meshStandardMaterial color="skyblue" />
                 </mesh>
             </group>
         </>
