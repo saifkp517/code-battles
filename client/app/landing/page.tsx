@@ -56,8 +56,9 @@ const Fireball = ({ startPosition, targetPosition, onExplode }: any) => {
 const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position }, ref) => {
   return (
     <mesh ref={ref} position={position}>
-      {/* <cylinderGeometry args={[0.75, 0.75, 1.5, 32]} />  */}
-      <boxGeometry args={[3, 3, 3]} />
+      {/* <cylinderGeometry args={[1.75, 1.75, 1.5, 32]} />  */}
+      <sphereGeometry args={[1.75]} />
+      {/* <boxGeometry args={[10, 3, 3]} /> */}
       <meshStandardMaterial color="red" />
     </mesh>
   );
@@ -67,8 +68,6 @@ const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position }, ref)
 // Main game component
 const FirstPersonGame: React.FC = () => {
   const obstacles = useRef<THREE.Mesh[]>([]);
-  const [colliding, setColliding] = useState(false);
-  const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
   const [gameStarted, setGameStarted] = useState(false);
 
 
@@ -86,58 +85,7 @@ const FirstPersonGame: React.FC = () => {
 
 
   // Check for collisions with all obstacles
-  const checkCollisions = (playerPosition: THREE.Vector3) => {
-    // Create player hitbox
-    const playerBox = new THREE.Box3().setFromCenterAndSize(
-      playerPosition,
-      new THREE.Vector3(1, 2, 1) // Player size
-    );
 
-    // Check collision with each obstacle
-    let isColliding = false;
-    for (const obstacle of obstacles.current) {
-      if (!obstacle) continue;
-
-      const obstacleBox = new THREE.Box3().setFromObject(obstacle);
-
-      if (playerBox.intersectsBox(obstacleBox)) {
-        //sliding collision algorithm(to get collision normal)
-        let collisionNormal = new THREE.Vector3(0, 0, 0);
-        let playerCenter = new THREE.Vector3();
-        playerBox.getCenter(playerCenter);
-
-        let obstacleCenter = new THREE.Vector3();
-        obstacleBox.getCenter(obstacleCenter);
-
-        let collisionVector = playerCenter.clone().sub(obstacleCenter);
-        let absVector = {
-          x: Math.abs(collisionVector.x),
-          y: Math.abs(collisionVector.y),
-          z: Math.abs(collisionVector.z),
-        };
-        
-        // Find which component has the largest magnitude
-        let maxComponent = Math.max(absVector.x, absVector.y, absVector.z);
-        
-        // Set the normal based on the dominant axis
-        if (maxComponent === absVector.x) {
-          collisionNormal.set(Math.sign(collisionVector.x), 0, 0);
-        } else if (maxComponent === absVector.y) {
-          collisionNormal.set(0, Math.sign(collisionVector.y), 0);
-        } else {
-          collisionNormal.set(0, 0, Math.sign(collisionVector.z));
-        }
-        setCollisionNormal(collisionNormal)
-        //sliding collision algorithm(to get collision normal)
-
-
-        isColliding = true
-        break;
-      }
-    }
-
-    setColliding(isColliding);
-  };
 
   const playerRef = useRef<THREE.Vector3>(null); // for storing latest position if needed
 
@@ -171,21 +119,15 @@ const FirstPersonGame: React.FC = () => {
         <pointLight position={[10, 10, 10]} intensity={1} />
         <gridHelper args={[50, 50]} />
 
-        <Player
-          onCollision={checkCollisions}
-          colliding={colliding}
-          collisionNormal={collisionNormal || new THREE.Vector3(0, 0, 0)}
-        />
+        <Ground>
+          <Player obstacles={obstacles} />
 
-        {/* Obstacles positioned around the scene */}
-        <Obstacle position={[5, 1, 0]} ref={addObstacleRef} />
-        <Obstacle position={[-5, 1, 0]} ref={addObstacleRef} />
-        <Obstacle position={[0, 1, 5]} ref={addObstacleRef} />
-        <Obstacle position={[0, 1, -5]} ref={addObstacleRef} />
-        <Obstacle position={[8, 1, 8]} ref={addObstacleRef} />
-
-        {/* Ground */}
-        <Ground />
+          <Obstacle position={[15, 1, 0]} ref={addObstacleRef} />
+          <Obstacle position={[-15, 1, 0]} ref={addObstacleRef} />
+          <Obstacle position={[10, 1, 5]} ref={addObstacleRef} />
+          <Obstacle position={[10, 1, -5]} ref={addObstacleRef} />
+          <Obstacle position={[18, 1, 8]} ref={addObstacleRef} />
+        </Ground>
       </Canvas>
     </div>
   );

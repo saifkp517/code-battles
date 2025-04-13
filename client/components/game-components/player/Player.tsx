@@ -6,9 +6,7 @@ import Explosion from '../explosion/Explosion';
 import * as THREE from 'three';
 
 interface PlayerProps {
-    onCollision: (playerPosition: THREE.Vector3, playerDirection: THREE.Vector3) => void;
-    colliding: boolean;
-    collisionNormal: THREE.Vector3;
+    obstacles: React.MutableRefObject<THREE.Mesh[]>;
 }
 
 type FireballProps = {
@@ -69,13 +67,156 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
 };
 
 
-const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal }) => {
+
+const Player: React.FC<PlayerProps> = ({ obstacles }) => {
     const { camera } = useThree();
+    const [colliding, setColliding] = useState(false);
+    const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
     const playerRef = useRef<THREE.Mesh>(null);
-    const isOnGround = useRef(false);
     const isJumpingRef = useRef(false);
     const [fireballs, setFireballs] = useState<{ id: number; position: THREE.Vector3; direction: THREE.Vector3 }[]>([]);
+    const [collisionType, setCollisionType] = useState("");
     const [explosions, setExplosions] = useState<{ id: number; position: THREE.Vector3 }[]>([]);
+
+    const checkCollisions = (playerPosition: THREE.Vector3) => {
+        // Create player hitbox - keeping box for player
+        const playerBox = new THREE.Box3().setFromCenterAndSize(
+            playerPosition,
+            new THREE.Vector3(1, 2, 1) // Player size
+        );
+
+        // Player sphere representation (for sphere-to-sphere collision)
+        const playerSphere = new THREE.Sphere(
+            playerPosition.clone(),
+            1 // Player radius (adjust based on your player size)
+        );
+
+        // Get player center for calculations
+        const playerCenter = new THREE.Vector3();
+        playerBox.getCenter(playerCenter);
+
+        // Check collision with each obstacle
+        let isColliding = false;
+        for (const obstacle of obstacles.current) {
+            if (!obstacle) continue;
+
+            // Determine if obstacle is spherical by checking its geometry
+            const isObstacleSphere = obstacle.geometry instanceof THREE.SphereGeometry;
+            const isObstacleCylinder = obstacle.geometry instanceof THREE.CylinderGeometry;
+
+            if (isObstacleSphere) {
+                // Handle sphere collision
+                // Get sphere center and radius from obstacle
+                const obstaclePosition = obstacle.position.clone();
+                const obstacleRadius = obstacle.geometry.parameters.radius * obstacle.scale.x; // Assuming uniform scale
+
+                // Calculate distance between centers
+                const distance = playerCenter.distanceTo(obstaclePosition);
+                const minDistance = playerSphere.radius + obstacleRadius;
+
+                if (distance < minDistance) {
+                    // Calculate collision normal (direction from obstacle to player)
+                    const collisionNormal = new THREE.Vector3()
+                        .subVectors(playerCenter, obstaclePosition)
+                        .normalize();
+
+                    setCollisionNormal(collisionNormal);
+                    isColliding = true;
+                    break;
+                }
+            } else if (isObstacleCylinder) {
+                // Handle cylinder collision
+                const obstaclePosition = obstacle.position.clone();
+                const obstacleRadius = obstacle.geometry.parameters.radiusTop * obstacle.scale.x;
+                const cylinderHeight = obstacle.geometry.parameters.height * obstacle.scale.y;
+                const halfHeight = cylinderHeight / 2;
+
+                // Create cylinder axis (assuming Y is up)
+                const cylinderTop = obstaclePosition.clone().add(new THREE.Vector3(0, halfHeight, 0));
+                const cylinderBottom = obstaclePosition.clone().add(new THREE.Vector3(0, -halfHeight, 0));
+
+                // Calculate horizontal distance to cylinder axis
+                const playerHorizontal = playerCenter.clone();
+                playerHorizontal.y = obstaclePosition.y; // Project onto cylinder's XZ plane
+
+                const cylinderAxis = new THREE.Vector3(0, 1, 0);
+                const playerToCylinder = new THREE.Vector3();
+                playerToCylinder.subVectors(playerHorizontal, obstaclePosition);
+                playerToCylinder.y = 0; // Only care about horizontal distance
+
+                const horizontalDistance = playerToCylinder.length();
+
+                // Check if player's Y position is within cylinder height
+                const playerY = playerCenter.y;
+                const inYRange = playerY >= obstaclePosition.y - halfHeight &&
+                    playerY <= obstaclePosition.y + halfHeight;
+
+                if (horizontalDistance < obstacleRadius + playerSphere.radius && inYRange) {
+                    // Side collision with cylinder
+                    const collisionNormal = playerToCylinder.clone().normalize();
+                    setCollisionNormal(collisionNormal);
+                    setCollisionType("cylinder-side");
+                    isColliding = true;
+                    break;
+                } else if (horizontalDistance < obstacleRadius) {
+                    // Top or bottom collision
+                    if (playerY > obstaclePosition.y) {
+                        // Top collision
+                        setCollisionNormal(new THREE.Vector3(0, 1, 0));
+                        setCollisionType("cylinder-top");
+                    } else {
+                        // Bottom collision
+                        setCollisionNormal(new THREE.Vector3(0, -1, 0));
+                        setCollisionType("cylinder-bottom");
+                    }
+                    isColliding = true;
+                    break;
+                }
+            }
+            else {
+                // Handle box collision (your existing code)
+                const obstacleBox = new THREE.Box3().setFromObject(obstacle);
+
+                if (playerBox.intersectsBox(obstacleBox)) {
+                    let collisionNormal = new THREE.Vector3(0, 0, 0);
+
+                    let obstacleCenter = new THREE.Vector3();
+                    obstacleBox.getCenter(obstacleCenter);
+
+                    // Calculate overlap on each axis
+                    const playerMin = playerBox.min;
+                    const playerMax = playerBox.max;
+                    const obstacleMin = obstacleBox.min;
+                    const obstacleMax = obstacleBox.max;
+
+                    // Calculate penetration depth on each axis
+                    const overlapX = Math.min(playerMax.x - obstacleMin.x, obstacleMax.x - playerMin.x);
+                    const overlapY = Math.min(playerMax.y - obstacleMin.y, obstacleMax.y - playerMin.y);
+                    const overlapZ = Math.min(playerMax.z - obstacleMin.z, obstacleMax.z - playerMin.z);
+
+                    // The collision normal should be along the axis with the smallest penetration
+                    if (overlapX <= overlapY && overlapX <= overlapZ) {
+                        // X-axis has smallest penetration
+                        collisionNormal.set(Math.sign(playerCenter.x - obstacleCenter.x), 0, 0);
+                    } else if (overlapY <= overlapX && overlapY <= overlapZ) {
+                        // Y-axis has smallest penetration
+                        collisionNormal.set(0, Math.sign(playerCenter.y - obstacleCenter.y), 0);
+                    } else {
+                        // Z-axis has smallest penetration
+                        collisionNormal.set(0, 0, Math.sign(playerCenter.z - obstacleCenter.z));
+                    }
+
+                    setCollisionNormal(collisionNormal);
+                    isColliding = true;
+                    break;
+                }
+            }
+        }
+        setColliding(isColliding);
+    };
+
+
+
 
     const handleShoot = () => {
         if (!playerRef.current) return;
@@ -173,9 +314,12 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
         let isGrounded = false;
 
 
+
         if (playerRef.current) {
             playerRef.current.position.copy(camera.position);
         }
+
+        checkCollisions(playerRef.current?.position || new THREE.Vector3(0, 0, 0));
 
         // Calculate movement direction based on camera orientation
         direction.current.z = Number(moveState.forward) - Number(moveState.backward);
@@ -212,53 +356,140 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
         camera.position.add(moveVector);
 
         if (colliding) {
-            const normal = collisionNormal.clone().normalize();
+            const normal = collisionNormal!.clone().normalize();
 
             // Restore previous position
             camera.position.copy(playerPosition);
 
+            // Check if the player is on top of something
             const isOnTop = normal.y > 0.7;
 
-            if (isOnTop) {
-                if(isJumpingRef.current) velocity.current.y = jumpStrength;
-                else velocity.current.y = 0;
-                isGrounded = true;
+            if (collisionType === "sphere") {
+                // Spherical collision handling
+                if (isOnTop) {
+                    // Standing on top of sphere
+                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
+                    else velocity.current.y = 0;
+                    isGrounded = true;
 
-                // Get the horizontal movement in camera space
-                const cameraDirection = new THREE.Vector3();
-                camera.getWorldDirection(cameraDirection);
-                cameraDirection.y = 0;
-                cameraDirection.normalize();
+                    // Apply horizontal movement
+                    const cameraDirection = new THREE.Vector3();
+                    camera.getWorldDirection(cameraDirection);
+                    cameraDirection.y = 0;
+                    cameraDirection.normalize();
 
-                const moveQuat = new THREE.Quaternion();
-                moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
+                    const moveQuat = new THREE.Quaternion();
+                    moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
 
-                // Apply full horizontal movement without restriction
-                const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
-                camera.position.x += horizontalMoveWorld.x;
-                camera.position.z += horizontalMoveWorld.z;
+                    const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
+                    camera.position.x += horizontalMoveWorld.x;
+                    camera.position.z += horizontalMoveWorld.z;
+                } else {
+                    // Side collision with sphere
+                    const movingAwayFromCollision = moveVector.dot(normal) > 0;
 
-            } else {
-                // Wall collision (not on top)
+                    if (movingAwayFromCollision) {
+                        camera.position.add(moveVector);
+                    } else {
+                        // Project the movement onto the tangent plane of the sphere
+                        const slideVector = moveVector.clone().projectOnPlane(normal);
+                        const pushDistance = 0.01;
 
-                // Check if player is trying to move away from the wall
-                const movingAwayFromWall = moveVector.dot(normal) > 0;
+                        camera.position.addScaledVector(normal, pushDistance);
+                        camera.position.add(slideVector);
 
-                if (movingAwayFromWall) {
-                    // Allow movement away from the wall
-                    camera.position.copy(playerPosition);
+                        // Adjust vertical velocity based on where on the sphere we hit
+                        if (normal.y < 0) {
+                            // Hitting ceiling-like part of sphere
+                            velocity.current.y = Math.min(velocity.current.y, 0);
+                        } else if (Math.abs(normal.y) < 0.3) {
+                            // Side collision with sphere
+                            if (velocity.current.y > 0) {
+                                velocity.current.y *= 0.8;
+                            }
+                        }
+                    }
+                }
+            } else if (collisionType === "cylinder-side") {
+                // Cylinder side collision
+                const movingAwayFromCollision = moveVector.dot(normal) > 0;
+
+                if (movingAwayFromCollision) {
                     camera.position.add(moveVector);
                 } else {
-                    // Apply sliding behavior for movement into the wall
-                    const slideVector = moveVector.clone().projectOnPlane(normal);
+                    // For cylinder sides, project movement onto the tangent plane
+                    // This is similar to sphere handling but preserves vertical movement
+                    const horizontalNormal = normal.clone();
+                    horizontalNormal.y = 0;
+                    horizontalNormal.normalize();
 
-                    // Push slightly away from the wall to prevent getting stuck
-                    const pushDistance = 0.001;
+                    // Create a slide vector that preserves vertical movement but slides horizontally
+                    const slideVector = moveVector.clone();
+                    const horizontalMove = new THREE.Vector3(moveVector.x, 0, moveVector.z);
+                    const horizontalProjected = horizontalMove.clone().projectOnPlane(horizontalNormal);
 
-                    // Apply both the push and the slide
-                    camera.position.copy(playerPosition); // Reset to pre-collision position
-                    camera.position.addScaledVector(normal, pushDistance); // Push away from wall
-                    camera.position.add(slideVector); // Slide along the wall
+                    slideVector.x = horizontalProjected.x;
+                    slideVector.z = horizontalProjected.z;
+
+                    const pushDistance = 0.01;
+                    camera.position.addScaledVector(horizontalNormal, pushDistance);
+                    camera.position.add(slideVector);
+                }
+            } else if (collisionType === "cylinder-top" || collisionType === "cylinder-bottom") {
+                // Top/bottom of cylinder, treat like a flat surface
+                if (collisionType === "cylinder-top") {
+                    console.log("cylinder-top")
+                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
+                    else velocity.current.y = 0;
+                    isGrounded = true;
+
+                    // Apply horizontal movement
+                    const cameraDirection = new THREE.Vector3();
+                    camera.getWorldDirection(cameraDirection);
+                    cameraDirection.y = 0;
+                    cameraDirection.normalize();
+
+                    const moveQuat = new THREE.Quaternion();
+                    moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
+
+                    const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
+                    camera.position.x += horizontalMoveWorld.x;
+                    camera.position.z += horizontalMoveWorld.z;
+                } else {
+                    // Bottom collision - just bounce off
+                    velocity.current.y = 0;
+                    camera.position.addScaledVector(normal, 0.01);
+                }
+            } else {
+                // Box collision (original code)
+                if (isOnTop) {
+                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
+                    else velocity.current.y = 0;
+                    isGrounded = true;
+
+                    const cameraDirection = new THREE.Vector3();
+                    camera.getWorldDirection(cameraDirection);
+                    cameraDirection.y = 0;
+                    cameraDirection.normalize();
+
+                    const moveQuat = new THREE.Quaternion();
+                    moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
+
+                    const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
+                    camera.position.x += horizontalMoveWorld.x;
+                    camera.position.z += horizontalMoveWorld.z;
+                } else {
+                    const movingAwayFromWall = moveVector.dot(normal) > 0;
+
+                    if (movingAwayFromWall) {
+                        camera.position.add(moveVector);
+                    } else {
+                        const slideVector = moveVector.clone().projectOnPlane(normal);
+                        const pushDistance = 0.001;
+
+                        camera.position.addScaledVector(normal, pushDistance);
+                        camera.position.add(slideVector);
+                    }
                 }
             }
         }
@@ -281,7 +512,7 @@ const Player: React.FC<PlayerProps> = ({ onCollision, colliding, collisionNormal
 
 
 
-        onCollision(playerPosition, cameraDirection);
+        checkCollisions(playerPosition);
     });
 
     return (
