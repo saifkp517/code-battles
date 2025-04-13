@@ -393,7 +393,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles }) => {
                     } else {
                         // Project the movement onto the tangent plane of the sphere
                         const slideVector = moveVector.clone().projectOnPlane(normal);
-                        const pushDistance = 0.01;
+                        const pushDistance = 0.001;
 
                         camera.position.addScaledVector(normal, pushDistance);
                         camera.position.add(slideVector);
@@ -509,7 +509,6 @@ const Player: React.FC<PlayerProps> = ({ obstacles }) => {
             camera.position.y = 1;
             velocity.current.y = 0;
         }
-
 
 
         checkCollisions(playerPosition);

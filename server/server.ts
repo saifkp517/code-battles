@@ -34,7 +34,7 @@ app.use(cors({
     credentials: true // Allow cookies and credentials
 }));
 app.use(express.json());
-app.use(cookieParser()); 
+app.use(cookieParser());
 
 //Routes
 app.use("/auth", router);
@@ -144,17 +144,17 @@ class MatchMaking {
 
     findMatch(player: Player, eloRange = 50): Player | null {
         const range = this.getEloRange(player.eloRating);
-    
+
         let bestMatch: Player | null = null;
-    
+
         const isValidMatch = (match: Player | null) => match && match.userId !== player.userId; // Ensure different users
-    
+
         // Check the player's range heap first
         if (this.eloHeaps.has(range)) {
             bestMatch = this.eloHeaps.get(range)!.extractMin();
             if (!isValidMatch(bestMatch)) bestMatch = null;
         }
-    
+
         // If no match, check adjacent ranges (lower & higher ELO brackets)
         if (!bestMatch) {
             if (this.eloHeaps.has(range - 100)) {
@@ -166,7 +166,7 @@ class MatchMaking {
                 if (!isValidMatch(bestMatch)) bestMatch = null;
             }
         }
-    
+
         // As a last resort, look through all heaps for a valid match
         if (!bestMatch) {
             for (const heap of this.eloHeaps.values()) {
@@ -178,7 +178,7 @@ class MatchMaking {
                 if (bestMatch) break;
             }
         }
-    
+
         return bestMatch;
     }
 }
@@ -188,80 +188,117 @@ const activeRooms: ActiveRooms = {};
 
 
 
-io.use(async (socket: AuthenticatedSocket, next) => {
-    const cookieString = socket.request.headers.cookie;;
-    if (!cookieString) {
-        console.log("Authentication Error")
-        return next(new Error("Authentication Error"));
-    }
+// io.use(async (socket: AuthenticatedSocket, next) => {
+//     const cookieString = socket.request.headers.cookie;;
+//     if (!cookieString) {
+//         console.log("Authentication Error")
+//         return next(new Error("Authentication Error"));
+//     }
 
-    try {
-        
-        const match = cookieString.match(/session_id=([^;]+)/);
-        const session_id = match ? match[1] : null;
+//     try {
 
-        const user = await authorizeSession(session_id);
-        socket.user = user;
-        next();
-    } catch (err) {
-        console.log("invalid token")
-        next(new Error("Invalid token"));
-    }
-})
+//         const match = cookieString.match(/session_id=([^;]+)/);
+//         const session_id = match ? match[1] : null;
+
+//         const user = await authorizeSession(session_id);
+//         socket.user = user;
+//         next();
+//     } catch (err) {
+//         console.log("invalid token")
+//         next(new Error("Invalid token"));
+//     }
+// })
+
+type Position = {
+    x: number;
+    y: number;
+    z: number;
+};
+
+type PlayerMap = {
+    [socketId: string]: Position;
+};
+
+let players: PlayerMap = {};
+
+function getRandomPosition(min = -10, max = 10) {
+    const rand = () => Math.random() * (max - min) + min;
+    return { x: rand(), y: 0, z: rand() }; // y is usually 0 for ground level
+}
 
 io.on('connection', (socket: AuthenticatedSocket) => {
 
-    socket.on("findMatch", (playerData) => {
-        const { userId, eloRating } = playerData;
+    console.log('User connected:', socket.id);
 
-        const player: Player = { userId, eloRating, socket, socketId: socket.id }
+    players[socket.id] = getRandomPosition();
 
-        console.log(`Player ${userId} search for a match....`);
+    socket.emit("currentPlayers", players);
 
-        const opponent = matchMakingSystem.findMatch(player);
+    socket.broadcast.emit("newPlayer", { id: socket.id, position: players[socket.id] })
 
-        if (opponent) {
-            console.log(`Match found: ${player.userId} vs ${opponent.userId}`);
 
-            player.socket?.emit("matchFound", { opponentId: opponent.userId });
-            opponent.socket?.emit("matchFound", { opponentId: player.userId });
-
-        } else {
-            matchMakingSystem.addPlayer(player);
-
-            socket.emit("waiting", { message: "Waiting for an Opponenent" });
-        }
+    socket.on('updatePosition', (position) => {
+        players[socket.id] = position;
+        socket.broadcast.emit('playerMoved', { id: socket.id, position });
     });
 
-    socket.on('joinRoom', (userid) => {
-        console.log('user has joined room')
-        const roomId = findOrCreateRoom(userid, socket.id);
-        socket.join(roomId);
-
-        const players = activeRooms[roomId].players;
-        console.log(players)
-        socket.emit('roomAssigned', { roomId });
-
-        io.to(roomId).emit('updatePlayers', players);
-
-        if (players.length === 2) {
-            io.to(roomId).emit('startBattle', { roomId, players })
-        }
+    socket.on("disconnect", () => {
+        console.log('User disconnected:', socket.id);
+        delete players[socket.id];
+        io.emit('playerDisconnected', socket.id);
     })
 
-    //sync code across both players
-    socket.on('codeUpdate', ({ roomId, code }) => {
+    // socket.on("findMatch", (playerData) => {
+    //     const { userId, eloRating } = playerData;
 
-        socket.to(roomId).emit('opponentCode', {
-            code,
-            from: socket.id,
-        });
-    });
+    //     const player: Player = { userId, eloRating, socket, socketId: socket.id }
 
-    socket.on('disconnect', () => {
-        console.log(`User ${socket.user} disconnected`);
-        removePlayer(socket.id);
-    })
+    //     console.log(`Player ${userId} search for a match....`);
+
+    //     const opponent = matchMakingSystem.findMatch(player);
+
+    //     if (opponent) {
+    //         console.log(`Match found: ${player.userId} vs ${opponent.userId}`);
+
+    //         player.socket?.emit("matchFound", { opponentId: opponent.userId });
+    //         opponent.socket?.emit("matchFound", { opponentId: player.userId });
+
+    //     } else {
+    //         matchMakingSystem.addPlayer(player);
+
+    //         socket.emit("waiting", { message: "Waiting for an Opponenent" });
+    //     }
+    // });
+
+    // socket.on('joinRoom', (userid) => {
+    //     console.log('user has joined room')
+    //     const roomId = findOrCreateRoom(userid, socket.id);
+    //     socket.join(roomId);
+
+    //     const players = activeRooms[roomId].players;
+    //     console.log(players)
+    //     socket.emit('roomAssigned', { roomId });
+
+    //     io.to(roomId).emit('updatePlayers', players);
+
+    //     if (players.length === 2) {
+    //         io.to(roomId).emit('startBattle', { roomId, players })
+    //     }
+    // })
+
+    // //sync code across both players
+    // socket.on('codeUpdate', ({ roomId, code }) => {
+
+    //     socket.to(roomId).emit('opponentCode', {
+    //         code,
+    //         from: socket.id,
+    //     });
+    // });
+
+    // socket.on('disconnect', () => {
+    //     console.log(`User ${socket.user} disconnected`);
+    //     removePlayer(socket.id);
+    // })
 })
 
 function findOrCreateRoom(userId: string, socketId: string) {
@@ -288,7 +325,7 @@ function removePlayer(socketId: string) {
             (player) => player.socketId !== socketId
         );
 
-        if(activeRooms[roomId].players.length == 1) {
+        if (activeRooms[roomId].players.length == 1) {
             const winner = activeRooms[roomId].players[0];
             io.to(winner.socketId).emit("gameOver", {
                 winner: winner.userId,
@@ -296,7 +333,7 @@ function removePlayer(socketId: string) {
             })
 
             delete activeRooms[roomId];
-            
+
         } else if (activeRooms[roomId].players.length === 0) {
             delete activeRooms[roomId]; // Cleanup empty rooms
         }
