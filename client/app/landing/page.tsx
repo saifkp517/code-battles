@@ -57,8 +57,8 @@ const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position }, ref)
   return (
     <mesh ref={ref} position={position}>
       {/* <cylinderGeometry args={[1.75, 1.75, 1.5, 32]} />  */}
-      <sphereGeometry args={[1.75]} />
-      {/* <boxGeometry args={[10, 3, 3]} /> */}
+      {/* <sphereGeometry args={[5.75]} /> */}
+      <boxGeometry args={[10, 30, 3]} />
       <meshStandardMaterial color="red" />
     </mesh>
   );
@@ -119,14 +119,19 @@ const FirstPersonGame: React.FC = () => {
         <pointLight position={[10, 10, 10]} intensity={1} />
         <gridHelper args={[50, 50]} />
 
-        <Ground>
-          <Player obstacles={obstacles} />
+        <Ground fogDistance={25} fogColor="#CEDFE0">
+          {(getGroundHeight) => (
+            <>
+              <Player obstacles={obstacles} getGroundHeight={getGroundHeight} />
 
-          <Obstacle position={[15, 1, 0]} ref={addObstacleRef} />
-          <Obstacle position={[-15, 1, 0]} ref={addObstacleRef} />
-          <Obstacle position={[10, 1, 5]} ref={addObstacleRef} />
-          <Obstacle position={[10, 1, -5]} ref={addObstacleRef} />
-          <Obstacle position={[18, 1, 8]} ref={addObstacleRef} />
+              <Obstacle position={[15, 1, 0]} ref={addObstacleRef} />
+              <Obstacle position={[-15, 1, 0]} ref={addObstacleRef} />
+              <Obstacle position={[10, 1, 5]} ref={addObstacleRef} />
+              <Obstacle position={[10, 1, -5]} ref={addObstacleRef} />
+              <Obstacle position={[18, 1, 8]} ref={addObstacleRef} />
+            </>
+          )}
+
         </Ground>
       </Canvas>
     </div>

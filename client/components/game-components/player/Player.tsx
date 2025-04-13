@@ -7,6 +7,7 @@ import * as THREE from 'three';
 
 interface PlayerProps {
     obstacles: React.MutableRefObject<THREE.Mesh[]>;
+    getGroundHeight: (x: number, z: number) => number;
 }
 
 type FireballProps = {
@@ -68,7 +69,7 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
 
 
 
-const Player: React.FC<PlayerProps> = ({ obstacles }) => {
+const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const { camera } = useThree();
     const [colliding, setColliding] = useState(false);
     const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
@@ -247,7 +248,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles }) => {
     const gravity = -9.8 * 2;
     const jumpStrength = 10;
 
-    const playerSpeed = 5;
+    const playerSpeed = 15;
 
     const controlsRef = useRef<any>(null);
 
@@ -502,14 +503,13 @@ const Player: React.FC<PlayerProps> = ({ obstacles }) => {
         }
         camera.position.y += velocity.current.y * delta;
 
+        const groundY = getGroundHeight(camera.position.x, camera.position.z);
 
-        // Prevent falling below ground (y = 1 is ground level)
-        if (camera.position.y < 1) {
+        if (camera.position.y < groundY + 1.5) {
             isJumpingRef.current = false;
-            camera.position.y = 1;
+            camera.position.y = groundY + 1.5;
             velocity.current.y = 0;
         }
-
 
         checkCollisions(playerPosition);
     });

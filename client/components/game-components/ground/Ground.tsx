@@ -1,41 +1,145 @@
-import { useThree } from "@react-three/fiber";
-import { useEffect, useMemo, forwardRef } from "react";
+import { useThree, useLoader, useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, forwardRef, useState } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
-import { useLoader } from "@react-three/fiber";
 import { Sky } from "@react-three/drei";
 
+type GroundProps = {
+  children?: (getGroundHeight: (x: number, z: number) => number) => React.ReactNode;
+  fogDistance?: number;
+  fogColor?: string;
+};
 
-
-const Ground = forwardRef<THREE.Mesh, { children?: React.ReactNode }>((props, ref) => {
+const Ground = forwardRef<THREE.Mesh, GroundProps>(({ 
+  children, 
+  fogDistance = 100, 
+  fogColor = "#B0C4DE" 
+}, ref) => {
   const { scene } = useThree();
+  const geometryRef = useRef<THREE.PlaneGeometry>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  const grassMap = useLoader(TextureLoader, "/textures/grass.jpg");
+  // Load textures
+  const [grassMap, roughnessMap, noiseMap] = useLoader(TextureLoader, [
+    "/textures/grass.jpg",
+    "/textures/grass_rough.jpg", // You'll need to add this texture
+    "/textures/grass_normal.jpg"      // You'll need to add this texture
+  ]);
 
+  // Create noise-based roughness variation
+  const [roughnessVariation] = useState(() => {
+    // Create a data texture for random roughness
+    const size = 256;
+    const data = new Uint8Array(size * size);
+    for (let i = 0; i < size * size; i++) {
+      data[i] = Math.floor(Math.random() * 1024);
+    }
+    const roughnessNoiseTexture = new THREE.DataTexture(data, size, size);
+    roughnessNoiseTexture.wrapS = roughnessNoiseTexture.wrapT = THREE.RepeatWrapping;
+    roughnessNoiseTexture.repeat.set(10, 10);
+    roughnessNoiseTexture.needsUpdate = true;
+    return roughnessNoiseTexture;
+  });
+
+  // Define height logic with added noise
   const getGroundHeight = (x: number, z: number): number => {
-    // Simple procedural function – tweak per terrain type
-    const frequency = 0.1;
-    const amplitude = 1;
-    return Math.sin(x * frequency) * Math.cos(z * frequency) * amplitude;
+    const primaryFrequency = 0.1;
+    const secondaryFrequency = 0.2; 
+    const amplitude = 1.5;
+    const noiseAmplitude = 0.4;
+    
+    // Combine multiple frequencies for more natural terrain
+    const baseHeight = Math.sin(x * primaryFrequency) * Math.cos(z * primaryFrequency) * amplitude;
+    
+    // Add some noise with pseudo-random value
+    const noise = Math.sin(x * secondaryFrequency * 3.7) * Math.cos(z * secondaryFrequency * 2.3) * noiseAmplitude;
+    
+    return baseHeight + noise;
   };
 
+  // Set global fog that affects everything in the scene
   useEffect(() => {
-    scene.fog = null;
+    // Use exponential fog for more realistic distance fading
+    scene.fog = new THREE.FogExp2(fogColor, 1 / (fogDistance * 1.5));
+    
+    // Set background color to match fog for sky blending
+    scene.background = new THREE.Color(fogColor);
+    
     return () => {
       scene.fog = null;
+      scene.background = null;
     };
-  }, [scene]);
+  }, [scene, fogDistance, fogColor]);
 
+  // Process textures
   useMemo(() => {
+    // Grass texture setup
     grassMap.wrapS = grassMap.wrapT = THREE.RepeatWrapping;
     grassMap.repeat.set(100, 100);
     grassMap.anisotropy = 16;
-  }, [grassMap]);
+    grassMap.minFilter = THREE.LinearMipmapLinearFilter;
+    
+    // If roughness map is available, configure it
+    if (roughnessMap) {
+      roughnessMap.wrapS = roughnessMap.wrapT = THREE.RepeatWrapping;
+      roughnessMap.repeat.set(50, 50);
+    }
+    
+    // If noise map is available, configure it
+    if (noiseMap) {
+      noiseMap.wrapS = noiseMap.wrapT = THREE.RepeatWrapping;
+      noiseMap.repeat.set(30, 30);
+    }
+  }, [grassMap, roughnessMap, noiseMap]);
 
   const sunPosition = useMemo(() => new THREE.Vector3(100, 10, 100), []);
 
+  // Apply terrain deformation to the mesh
+  useEffect(() => {
+    const geom = geometryRef.current;
+    if (!geom) return;
+
+    const posAttr = geom.attributes.position;
+    const vertex = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+    
+    // Add UV2 attribute for second texture coordinates
+    const uv2 = new Float32Array(posAttr.count * 2);
+    
+    for (let i = 0; i < posAttr.count; i++) {
+      vertex.fromBufferAttribute(posAttr, i);
+
+      // Since the plane is rotated, X and Y are horizontal, Z is height
+      const height = getGroundHeight(vertex.x, vertex.y);
+      vertex.setZ(height);
+      
+      // Set varied UV2 coordinates for detail maps
+      uv2[i * 2] = vertex.x * 0.05; 
+      uv2[i * 2 + 1] = vertex.y * 0.05;
+
+      posAttr.setXYZ(i, vertex.x, vertex.y, vertex.z);
+    }
+    
+    // Add second UV set for detail textures
+    geom.setAttribute('uv2', new THREE.BufferAttribute(uv2, 2));
+
+    posAttr.needsUpdate = true;
+    geom.computeVertexNormals();
+  }, []);
+
+  // Animate roughness variation over time for extra randomness
+  useFrame((state) => {
+    if (materialRef.current) {
+      // Slowly shift the roughness noise texture for subtle variation
+      roughnessVariation.offset.x = state.clock.elapsedTime * 0.01;
+      roughnessVariation.offset.y = state.clock.elapsedTime * 0.02;
+      roughnessVariation.needsUpdate = true;
+    }
+  });
+
   return (
     <>
+      {/* Sky with fog-matching background */}
       <Sky
         distance={450000}
         sunPosition={sunPosition}
@@ -47,26 +151,47 @@ const Ground = forwardRef<THREE.Mesh, { children?: React.ReactNode }>((props, re
         mieDirectionalG={0.7}
       />
 
-      {/* GROUND MESH */}
+      {/* Deformed Terrain */}
       <mesh
         ref={ref}
         rotation={[-Math.PI / 2, 0, 0]}
         position={[0, -0.1, 0]}
         receiveShadow
       >
-        <planeGeometry args={[2000, 2000, 128, 128]} />
-        <meshStandardMaterial map={grassMap} roughness={0.8} metalness={0.1} />
+        <planeGeometry ref={geometryRef} args={[2000, 2000, 128, 128]} />
+        <meshStandardMaterial
+          ref={materialRef}
+          map={grassMap}
+          
+          // Use the noise texture as roughness map or fallback to the roughness texture
+          roughnessMap={roughnessVariation || roughnessMap}
+          roughness={0.9}
+          
+          // Add random roughness metalnessMap
+          metalnessMap={noiseMap}
+          metalness={0.05}
+          
+          // Add displacement for micro-detail
+          displacementMap={noiseMap}
+          displacementScale={0.8}
+          
+          // Use noise for normal variation
+          normalScale={new THREE.Vector2(1.0, 1.0)}
+          
+          // Adjust color to blend with fog at distance
+          color={new THREE.Color(0xffffff).lerp(new THREE.Color(fogColor), 0.1)}
+        />
       </mesh>
 
-      {/* LIGHTING */}
+      {/* Lighting adjusted to match fog atmosphere */}
       <ambientLight intensity={0.4} color="#D6EAF8" />
       <directionalLight position={sunPosition} intensity={1.5} castShadow color="#FFFAF0">
         <orthographicCamera attach="shadow-camera" args={[-100, 100, 100, -100, 0.1, 200]} />
       </directionalLight>
       <hemisphereLight args={["#B3E5FC", "#C5E1A5", 0.3]} position={[0, 50, 0]} />
 
-      {/* CHILDREN LIKE PLAYER + OBSTACLES */}
-      {props.children}
+      {/* Children like Player/Obstacles get access to height */}
+      {children?.(getGroundHeight)}
     </>
   );
 });
