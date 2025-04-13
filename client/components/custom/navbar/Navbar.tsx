@@ -30,7 +30,7 @@ export default function Navbar({ username, icon, eloscore }: NavProps) {
         <div className="flex items-center gap-4">
             <Avatar className="w-10 h-10 rounded-full overflow-hidden">
                 <AvatarImage
-                    src={icon?.startsWith("https") || "https://github.com/shadcn.png"}
+                    src={icon?.startsWith("https") ? icon : "https://github.com/shadcn.png"}
                     alt="@shadcn"
                     className="object-cover w-full h-full"
                 />

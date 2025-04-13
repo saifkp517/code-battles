@@ -9,13 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Editor from '@monaco-editor/react';
 import { io, Socket } from 'socket.io-client';
 import CodeExecutor from '../utils/codeExecutor';
-import { Clock, Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
+import { Code, CheckCircle, X, Eye, EyeOff, Crown, AlertTriangle, MessageCircle, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { redirect } from 'next/navigation';
 import { useAuth } from '../utils/AuthContext';
-import { CountdownOverlay } from '@/components/animations/Countdown';
-import { GameWinOverlay } from '@/components/animations/GameWinOverlay';
 
 
 const CodeBattleArena = () => {
@@ -97,7 +94,7 @@ const CodeBattleArena = () => {
   const messagesEndRef = useRef(null);
 
   // Generate initial code based on problem and language
-  const generateInitialCode = (problem, language) => {
+  const generateInitialCode = (problem: any, language: any) => {
     const functionName = generateFunctionName(problem.description);
 
     switch (language.name) {
@@ -169,12 +166,12 @@ fn main() {
   };
 
   // Utility to generate function name from problem statement
-  const generateFunctionName = (problem) => {
+  const generateFunctionName = (problem: any) => {
     const keywords = problem
       .match(/\b(array|sum|subarray|maximum|find|largest|optimization|contiguous|two|target)\b/gi) || [];
 
     const functionName = keywords
-      .map((word, index) =>
+      .map((word: string, index: number) =>
         index === 0
           ? word.toLowerCase()
           : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
@@ -201,7 +198,7 @@ fn main() {
             withCredentials: true
           });
     
-          const handleOpponentCode = ({ code, from }) => {
+          const handleOpponentCode = ({ code, from }: any) => {
             if (socketRef.current && from === socketRef.current.id) {
               setYourCode(code); // It's your code
             } else {
@@ -286,7 +283,7 @@ fn main() {
   };
 
   // Handle problem selection change
-  const handleProblemChange = (problemId) => {
+  const handleProblemChange = (problemId: string) => {
     const problem = problemStatements.find(p => p.id === problemId);
     if (problem) {
       setCurrentProblem(problem);
@@ -294,7 +291,7 @@ fn main() {
   };
 
   // Handle language selection change
-  const handleLanguageChange = (languageId) => {
+  const handleLanguageChange = (languageId: string) => {
     const language = languages.find(l => l.id.toString() === languageId);
     if (language) {
       setSelectedLanguage(language);
@@ -302,14 +299,14 @@ fn main() {
   };
 
   // Format time from seconds to MM:SS
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Get status styling
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'submitted': return 'text-yellow-500';
       case 'passed': return 'text-green-500';
@@ -318,7 +315,7 @@ fn main() {
     }
   };
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
       case 'submitted': return <AlertTriangle className="w-4 h-4 text-yellow-500" />;
       case 'passed': return <CheckCircle className="w-4 h-4 text-green-500" />;
@@ -328,7 +325,7 @@ fn main() {
   };
 
   // Format chat timestamp
-  const formatMessageTime = (timestamp) => {
+  const formatMessageTime = (timestamp: Date) => {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
@@ -409,18 +406,15 @@ fn main() {
                       messages.map((msg, index) => (
                         <div
                           key={index}
-                          className={`mb-2 ${msg.isFromYou ? 'text-right' : 'text-left'}`}
+                          className={`mb-2`}
                         >
                           <div
-                            className={`inline-block p-2 rounded-lg ${msg.isFromYou
-                              ? 'bg-blue-600 text-white'
+                            className={`inline-block p-2 rounded-lg 'bg-blue-600 text-white'
                               : 'bg-slate-700 text-slate-200'
                               }`}
                           >
-                            {msg.text}
                           </div>
                           <div className="text-xs text-slate-500 mt-1">
-                            {formatMessageTime(msg.timestamp)}
                           </div>
                         </div>
                       ))
@@ -501,7 +495,6 @@ fn main() {
                         language={"javascript"}
                         theme="vs-dark"
                         value={yourCode}
-                        onChange={handleCodeChange}
                         options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
                       />
                     </div>
@@ -548,7 +541,6 @@ fn main() {
                         language={selectedLanguage.extension}
                         theme="vs-dark"
                         value={yourCode}
-                        onChange={handleCodeChange}
                         options={{ minimap: { enabled: false }, scrollBeyondLastLine: false }}
                       />
                     </div>

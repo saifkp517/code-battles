@@ -6,7 +6,7 @@ import Explosion from '../explosion/Explosion';
 import * as THREE from 'three';
 
 interface PlayerProps {
-    obstacles: React.MutableRefObject<THREE.Mesh[]>;
+    obstacles: any;
     getGroundHeight: (x: number, z: number) => number;
 }
 
