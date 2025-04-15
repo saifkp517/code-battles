@@ -310,7 +310,8 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
         //get parent terrain ground height
         const groundY = getGroundHeight(camera.position.x, camera.position.z);
-        let onGround = camera.position.y <= groundY + 1.5
+        let onGround = camera.position.y <= groundY + 2
+        console.log(onGround)
 
         if (playerRef.current) {
             playerRef.current.position.copy(camera.position);
@@ -521,7 +522,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                 if (isOnTop) {
 
                     isGrounded = true;
-
+                    onGround = true;
 
                     const cameraDirection = new THREE.Vector3();
                     camera.getWorldDirection(cameraDirection);
@@ -572,6 +573,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
             }
         }
 
+        playerPosition.copy(camera.position)
 
         checkCollisions(playerPosition);
     });
