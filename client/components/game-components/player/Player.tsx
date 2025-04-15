@@ -73,6 +73,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const { camera } = useThree();
     const [colliding, setColliding] = useState(false);
     const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
+    const jumpRequested = useRef(false);
     const playerRef = useRef<THREE.Mesh>(null);
     const isJumpingRef = useRef(false);
     const [fireballs, setFireballs] = useState<{ id: number; position: THREE.Vector3; direction: THREE.Vector3 }[]>([]);
@@ -132,9 +133,6 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                 const cylinderHeight = obstacle.geometry.parameters.height * obstacle.scale.y;
                 const halfHeight = cylinderHeight / 2;
 
-                // Create cylinder axis (assuming Y is up)
-                const cylinderTop = obstaclePosition.clone().add(new THREE.Vector3(0, halfHeight, 0));
-                const cylinderBottom = obstaclePosition.clone().add(new THREE.Vector3(0, -halfHeight, 0));
 
                 // Calculate horizontal distance to cylinder axis
                 const playerHorizontal = playerCenter.clone();
@@ -250,7 +248,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const gravity = -9.8 * 2;
     const jumpStrength = 10;
 
-    const playerSpeed = 15;
+    const playerSpeed = 10;
 
     const controlsRef = useRef<any>(null);
 
@@ -275,11 +273,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                 case 'KeyA': setMoveState(prev => ({ ...prev, left: true })); break;
                 case 'KeyD': setMoveState(prev => ({ ...prev, right: true })); break;
                 case 'Space':
-                    // if (!isJumpingRef.current && camera.position.y <= 1.05) {
-                    if (!isJumpingRef.current) {
-                        velocity.current.y = jumpStrength;
-                        isJumpingRef.current = true;
-                    }
+                    jumpRequested.current = true;
                     break;
             }
         };
@@ -291,9 +285,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                 case 'KeyA': setMoveState(prev => ({ ...prev, left: false })); break;
                 case 'KeyD': setMoveState(prev => ({ ...prev, right: false })); break;
                 case 'Space':
-                    if (isJumpingRef.current) {
-                        isJumpingRef.current = false;
-                    }
+                    jumpRequested.current = false;
                     break;
             }
         };
@@ -316,7 +308,9 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
         let isGrounded = false;
 
-
+        //get parent terrain ground height
+        const groundY = getGroundHeight(camera.position.x, camera.position.z);
+        let onGround = camera.position.y <= groundY + 1.5
 
         if (playerRef.current) {
             playerRef.current.position.copy(camera.position);
@@ -358,7 +352,37 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
         // Step 2: Apply movement
         camera.position.add(moveVector);
 
+        //handle jump
+
+        if (jumpRequested.current && onGround) {
+            camera.position.addScaledVector(cameraDirection, playerSpeed * delta)
+
+            velocity.current.y = jumpStrength;
+            isJumpingRef.current = true;
+            jumpRequested.current = false;
+        }
+
+
+        // Apply gravity
+
+        if (!isGrounded) {
+            velocity.current.y += gravity * delta;
+        }
+        camera.position.y += velocity.current.y * delta;
+
+
+
+        if (camera.position.y < groundY + 1.5) {
+            isJumpingRef.current = false;
+            camera.position.y = groundY + 1.5;
+            velocity.current.y = 0;
+        }
+
+
+
+        //collision detection handling
         if (colliding) {
+            isJumpingRef.current = false;
             const normal = collisionNormal!.clone().normalize();
 
             // Restore previous position
@@ -371,7 +395,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                 // Spherical collision handling
                 if (isOnTop) {
                     // Standing on top of sphere
-                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
+                    if (jumpRequested) velocity.current.y = jumpStrength;
                     else velocity.current.y = 0;
                     isGrounded = true;
 
@@ -381,12 +405,33 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     cameraDirection.y = 0;
                     cameraDirection.normalize();
 
+                    if (jumpRequested.current && onGround) {
+                        cameraDirection.normalize().multiplyScalar(playerSpeed);
+
+                        velocity.current.y = jumpStrength;
+                        isJumpingRef.current = true;
+                        jumpRequested.current = false;
+                    }
+
+
                     const moveQuat = new THREE.Quaternion();
                     moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
 
                     const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
                     camera.position.x += horizontalMoveWorld.x;
                     camera.position.z += horizontalMoveWorld.z;
+
+                    //jump from top
+                    const topHeight = camera.position.y;
+                    const nextY = camera.position.y + velocity.current.y * delta;
+
+                    if (nextY >= topHeight) {
+                        camera.position.y = nextY;
+                    } else {
+                        camera.position.y = topHeight;
+                        velocity.current.y = 0;
+                        isJumpingRef.current = false;
+                    }
                 } else {
                     // Side collision with sphere
                     const movingAwayFromCollision = moveVector.dot(normal) > 0;
@@ -441,9 +486,6 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
             } else if (collisionType === "cylinder-top" || collisionType === "cylinder-bottom") {
                 // Top/bottom of cylinder, treat like a flat surface
                 if (collisionType === "cylinder-top") {
-                    console.log("cylinder-top")
-                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
-                    else velocity.current.y = 0;
                     isGrounded = true;
 
                     // Apply horizontal movement
@@ -452,12 +494,23 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     cameraDirection.y = 0;
                     cameraDirection.normalize();
 
+                    if (jumpRequested.current && onGround ) {
+                        cameraDirection.normalize().multiplyScalar(playerSpeed);
+
+                        velocity.current.y = jumpStrength;
+                        isJumpingRef.current = true;
+                        jumpRequested.current = false;
+                    }
+
+
                     const moveQuat = new THREE.Quaternion();
                     moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
 
                     const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
                     camera.position.x += horizontalMoveWorld.x;
                     camera.position.z += horizontalMoveWorld.z;
+
+
                 } else {
                     // Bottom collision - just bounce off
                     velocity.current.y = 0;
@@ -466,14 +519,24 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
             } else {
                 // Box collision (original code)
                 if (isOnTop) {
-                    if (isJumpingRef.current) velocity.current.y = jumpStrength;
-                    else velocity.current.y = 0;
+
                     isGrounded = true;
+
 
                     const cameraDirection = new THREE.Vector3();
                     camera.getWorldDirection(cameraDirection);
                     cameraDirection.y = 0;
                     cameraDirection.normalize();
+
+                    if (jumpRequested.current && !isJumpingRef.current) {
+                        cameraDirection.normalize().multiplyScalar(playerSpeed);
+
+                        velocity.current.y = jumpStrength;
+                        isJumpingRef.current = true;
+                        jumpRequested.current = false;
+                    }
+
+
 
                     const moveQuat = new THREE.Quaternion();
                     moveQuat.setFromUnitVectors(new THREE.Vector3(0, 0, 1), cameraDirection);
@@ -481,6 +544,18 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     const horizontalMoveWorld = horizontalMove.clone().applyQuaternion(moveQuat);
                     camera.position.x += horizontalMoveWorld.x;
                     camera.position.z += horizontalMoveWorld.z;
+
+                    //jump from top
+                    const topHeight = camera.position.y;
+                    const nextY = camera.position.y + velocity.current.y * delta;
+
+                    if (nextY >= topHeight) {
+                        camera.position.y = nextY;
+                    } else {
+                        camera.position.y = topHeight;
+                        velocity.current.y = 0;
+                        isJumpingRef.current = false;
+                    }
                 } else {
                     const movingAwayFromWall = moveVector.dot(normal) > 0;
 
@@ -497,21 +572,6 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
             }
         }
 
-
-        // Apply gravity
-
-        if (!isGrounded) {
-            velocity.current.y += gravity * delta;
-        }
-        camera.position.y += velocity.current.y * delta;
-
-        const groundY = getGroundHeight(camera.position.x, camera.position.z);
-
-        if (camera.position.y < groundY + 1.5) {
-            isJumpingRef.current = false;
-            camera.position.y = groundY + 1.5;
-            velocity.current.y = 0;
-        }
 
         checkCollisions(playerPosition);
     });

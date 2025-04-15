@@ -11,6 +11,7 @@ import Ground from '@/components/game-components/ground/Ground';
 
 interface ObstacleProps {
   position: [number, number, number];
+  getGroundHeight: (x: number, z: number) => number;
 }
 
 
@@ -53,12 +54,23 @@ const Fireball = ({ startPosition, targetPosition, onExplode }: any) => {
 
 
 // Obstacle component with forwarded ref using a Cylinder
-const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position }, ref) => {
+const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
   return (
     <mesh ref={ref} position={position}>
       {/* <cylinderGeometry args={[1.75, 1.75, 1.5, 32]} />  */}
       {/* <sphereGeometry args={[5.75]} /> */}
-      <boxGeometry args={[10, 30, 3]} />
+      <boxGeometry args={[10, 5, 3]} />
+      <meshStandardMaterial color="red" />
+    </mesh>
+  );
+});
+
+const SphereObstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
+  return (
+    <mesh ref={ref} position={position}>
+      {/* <cylinderGeometry args={[1.75, 1.75, 1.5, 32]} />  */}
+      <sphereGeometry args={[3]} />
+      {/* <boxGeometry args={[10, 5, 3]} /> */}
       <meshStandardMaterial color="red" />
     </mesh>
   );
@@ -124,11 +136,11 @@ const FirstPersonGame: React.FC = () => {
             <>
               <Player obstacles={obstacles} getGroundHeight={getGroundHeight} />
 
-              <Obstacle position={[15, 1, 0]} ref={addObstacleRef} />
-              <Obstacle position={[-15, 1, 0]} ref={addObstacleRef} />
-              <Obstacle position={[10, 1, 5]} ref={addObstacleRef} />
-              <Obstacle position={[10, 1, -5]} ref={addObstacleRef} />
-              <Obstacle position={[18, 1, 8]} ref={addObstacleRef} />
+              <Obstacle position={[15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+              <Obstacle position={[-15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+              {/* <SphereObstacle position={[10, 1, 5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} /> */}
+              <Obstacle position={[10, 1, -5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+
             </>
           )}
 
