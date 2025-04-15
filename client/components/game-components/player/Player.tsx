@@ -528,7 +528,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     cameraDirection.y = 0;
                     cameraDirection.normalize();
 
-                    if (jumpRequested.current && !isJumpingRef.current) {
+                    if (jumpRequested.current) {
                         cameraDirection.normalize().multiplyScalar(playerSpeed);
 
                         velocity.current.y = jumpStrength;
