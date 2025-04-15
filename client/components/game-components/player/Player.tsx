@@ -236,12 +236,14 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     };
 
     const handleExplosion = (position: THREE.Vector3) => {
+
+        const id = Date.now();
         setFireballs((prev) => prev.slice(1)); // Remove the first fireball
-        setExplosions((prev) => [...prev, { id: Date.now(), position }]);
+        setExplosions((prev) => [...prev, { id, position }]);
 
         // Remove explosion after a second
         setTimeout(() => {
-            setExplosions((prev) => prev.filter((exp) => exp.id !== position.length()));
+            setExplosions((prev) => prev.filter((exp) => exp.id !== id));
         }, 1000);
     };
 
