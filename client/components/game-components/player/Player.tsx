@@ -75,6 +75,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
     const jumpRequested = useRef(false);
     const playerRef = useRef<THREE.Mesh>(null);
+    const jumpDirection = useRef(new THREE.Vector3());
     const isJumpingRef = useRef(false);
     const [fireballs, setFireballs] = useState<{ id: number; position: THREE.Vector3; direction: THREE.Vector3 }[]>([]);
     const [collisionType, setCollisionType] = useState("");
@@ -249,7 +250,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const jumpStrength = 10;
 
     const playerSpeed = 10;
-
+    const playerHeight = 2;
     const controlsRef = useRef<any>(null);
 
     const velocity = useRef<THREE.Vector3>(new THREE.Vector3());
@@ -310,8 +311,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
         //get parent terrain ground height
         const groundY = getGroundHeight(camera.position.x, camera.position.z);
-        let onGround = camera.position.y <= groundY + 2
-        console.log(onGround)
+        let onGround = camera.position.y <= groundY + playerHeight;
 
         if (playerRef.current) {
             playerRef.current.position.copy(camera.position);
@@ -356,13 +356,16 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
         //handle jump
 
         if (jumpRequested.current && onGround) {
-            camera.position.addScaledVector(cameraDirection, playerSpeed * delta)
+            jumpDirection.current.copy(cameraDirection);
 
             velocity.current.y = jumpStrength;
             isJumpingRef.current = true;
             jumpRequested.current = false;
         }
 
+        if (isJumpingRef.current && moveState.forward == false) {
+            camera.position.addScaledVector(jumpDirection.current, playerSpeed/2 * delta);
+        }
 
         // Apply gravity
 
@@ -373,9 +376,9 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
 
 
-        if (camera.position.y < groundY + 1.5) {
+        if (camera.position.y < groundY + playerHeight - 0.5) {
             isJumpingRef.current = false;
-            camera.position.y = groundY + 1.5;
+            camera.position.y = groundY + playerHeight- 0.5;
             velocity.current.y = 0;
         }
 
@@ -495,7 +498,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     cameraDirection.y = 0;
                     cameraDirection.normalize();
 
-                    if (jumpRequested.current && onGround ) {
+                    if (jumpRequested.current && onGround) {
                         cameraDirection.normalize().multiplyScalar(playerSpeed);
 
                         velocity.current.y = jumpStrength;
