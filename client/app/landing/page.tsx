@@ -16,43 +16,6 @@ interface ObstacleProps {
 
 
 
-const Fireball = ({ startPosition, targetPosition, onExplode }: any) => {
-
-  const fireballRef = useRef<THREE.Mesh>(null);
-  const [time, setTime] = useState(0);
-
-  // Calculate fireball path (elliptical arc)
-  const start = new THREE.Vector3(...startPosition);
-  const end = new THREE.Vector3(...targetPosition);
-  const mid = new THREE.Vector3().lerpVectors(start, end, 0.5).add(new THREE.Vector3(0, 3, 0)); // Arc peak
-
-  useFrame(() => {
-    if (!fireballRef.current) return;
-
-    setTime((prev) => prev + 0.02); // Time progression
-    if (time > 1) {
-      onExplode(end); // Fireball reaches target, trigger explosion
-      return;
-    }
-
-    // Quadratic Bézier curve (parabolic arc)
-    const newPosition = new THREE.Vector3()
-      .lerpVectors(start, mid, time)
-      .lerp(end, time);
-
-    fireballRef.current.position.copy(newPosition);
-  });
-
-  return (
-    <mesh ref={fireballRef} position={start}>
-      <sphereGeometry args={[0.3, 16, 16]} />
-      <meshStandardMaterial emissive="orange" color="red" />
-    </mesh>
-  );
-};
-
-
-
 // Obstacle component with forwarded ref using a Cylinder
 const Obstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
   return (
@@ -73,6 +36,26 @@ const SphereObstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, 
       {/* <boxGeometry args={[10, 5, 3]} /> */}
       <meshStandardMaterial color="red" />
     </mesh>
+  );
+});
+
+const CylinderObstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
+  return (
+    <mesh ref={ref} position={position} rotation={[-Math.PI / 2, 0, 0]} >
+    <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
+    <meshStandardMaterial color="red" />
+  </mesh>
+  
+  );
+});
+
+const CylinderObstacleVerticle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
+  return (
+    <mesh ref={ref} position={position} >
+    <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
+    <meshStandardMaterial color="red" />
+  </mesh>
+  
   );
 });
 
@@ -99,7 +82,6 @@ const FirstPersonGame: React.FC = () => {
   // Check for collisions with all obstacles
 
 
-  const playerRef = useRef<THREE.Vector3>(null); // for storing latest position if needed
 
 
   return (
@@ -120,10 +102,10 @@ const FirstPersonGame: React.FC = () => {
       ) : null} */}
 
       {/* Instructions */}
-      {/* <div className="absolute top-4 left-4 bg-white text-black p-2 z-10">
+      <div className="absolute top-4 left-4 bg-white text-black p-2 z-10">
         <p>WASD to move, Mouse to look</p>
         <p className="text-sm">Press ESC to release mouse</p>
-      </div> */}
+      </div>
 
       <Canvas camera={{ position: [0, 1.6, 0], fov: 75 }}>
         <Stats />
@@ -137,9 +119,9 @@ const FirstPersonGame: React.FC = () => {
               <Player obstacles={obstacles} getGroundHeight={getGroundHeight} />
 
               <Obstacle position={[15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
-              <Obstacle position={[-15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
-              {/* <SphereObstacle position={[10, 1, 5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} /> */}
-              <Obstacle position={[10, 1, -5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+              <SphereObstacle position={[-15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+              <CylinderObstacle position={[-30, 1, 5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
+              <CylinderObstacleVerticle position={[-25, 1, 5]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
 
             </>
           )}
