@@ -5,6 +5,7 @@ import Player from '@/components/game-components/player/Player';
 import * as THREE from 'three';
 import { Stats } from '@react-three/drei';
 import Ground from '@/components/game-components/ground/Ground';
+import socket from '@/lib/socket';
 
 // Define types for player and obstacle
 
@@ -42,20 +43,20 @@ const SphereObstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, 
 const CylinderObstacle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
   return (
     <mesh ref={ref} position={position} rotation={[-Math.PI / 2, 0, 0]} >
-    <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
-    <meshStandardMaterial color="red" />
-  </mesh>
-  
+      <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
+      <meshStandardMaterial color="red" />
+    </mesh>
+
   );
 });
 
 const CylinderObstacleVerticle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ position, getGroundHeight }, ref) => {
   return (
     <mesh ref={ref} position={position} >
-    <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
-    <meshStandardMaterial color="red" />
-  </mesh>
-  
+      <cylinderGeometry args={[1.75, 1.75, 15.5, 32]} />
+      <meshStandardMaterial color="red" />
+    </mesh>
+
   );
 });
 
@@ -63,7 +64,8 @@ const CylinderObstacleVerticle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ 
 // Main game component
 const FirstPersonGame: React.FC = () => {
   const obstacles = useRef<THREE.Mesh[]>([]);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [players, setPlayers] = useState<{ [id: string]: THREE.Vector3 }>({});
+
 
 
   // Setup obstacle references
@@ -116,7 +118,14 @@ const FirstPersonGame: React.FC = () => {
         <Ground fogDistance={25} fogColor="#CEDFE0">
           {(getGroundHeight) => (
             <>
-              <Player obstacles={obstacles} getGroundHeight={getGroundHeight} />
+              <Player
+                // key={id}
+                onPositionChange={(pos) => {
+                  socket.emit("updatePosition", pos.toArray());
+                }}
+                obstacles={obstacles.current}
+                getGroundHeight={getGroundHeight}
+              />
 
               <Obstacle position={[15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />
               <SphereObstacle position={[-15, 1, 0]} getGroundHeight={getGroundHeight} ref={addObstacleRef} />

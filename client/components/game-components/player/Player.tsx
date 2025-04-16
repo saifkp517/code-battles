@@ -6,8 +6,9 @@ import Explosion from '../explosion/Explosion';
 import * as THREE from 'three';
 
 interface PlayerProps {
-    obstacles: any;
+    obstacles: THREE.Mesh[];
     getGroundHeight: (x: number, z: number) => number;
+    onPositionChange: (pos: THREE.Vector3) => void;
 }
 
 type FireballProps = {
@@ -18,7 +19,7 @@ type FireballProps = {
     onExplode: (position: THREE.Vector3) => void;
 };
 
-const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obstacles = [], onExplode }) => {
+const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obstacles, onExplode }) => {
     const fireballRef = useRef<THREE.Mesh>(null);
     const startTime = useRef<number>(Date.now());
 
@@ -51,8 +52,11 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
             return;
         }
 
+
         for (const obstacle of obstacles) {
-            if (fireballPosition.distanceTo(obstacle.position) < 1.5) {
+            fireballPosition.distanceTo(obstacle.position)
+            if (fireballPosition.distanceTo(obstacle.position) < 5) {
+                console.log("ye");
                 onExplode(fireballPosition);
                 return;
             }
@@ -69,7 +73,7 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
 
 
 
-const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
+const Player: React.FC<PlayerProps> = ({ onPositionChange, obstacles, getGroundHeight }) => {
     const { camera } = useThree();
     const [colliding, setColliding] = useState(false);
     const [collisionNormal, setCollisionNormal] = useState<THREE.Vector3 | null>(null);
@@ -80,6 +84,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
     const [fireballs, setFireballs] = useState<{ id: number; position: THREE.Vector3; direction: THREE.Vector3 }[]>([]);
     const [collisionType, setCollisionType] = useState("");
     const [explosions, setExplosions] = useState<{ id: number; position: THREE.Vector3 }[]>([]);
+    const lastUpdateTime = useRef(0);
 
     const checkCollisions = (playerPosition: THREE.Vector3) => {
         // Create player hitbox - keeping box for player
@@ -100,7 +105,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
         // Check collision with each obstacle
         let isColliding = false;
-        for (const obstacle of obstacles.current) {
+        for (const obstacle of obstacles) {
             if (!obstacle) continue;
 
             // Determine if obstacle is spherical by checking its geometry
@@ -497,43 +502,43 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
             } else if (collisionType === "cylinder-side") {
                 // Cylinder side collision
                 const movingAwayFromCollision = moveVector.dot(normal) > 0;
-            
+
                 if (movingAwayFromCollision) {
                     camera.position.add(moveVector);
                 } else {
                     // Project movement onto the tangent plane of the cylinder side
                     const slideVector = moveVector.clone().projectOnPlane(normal);
-                    
+
                     // Add a small push away from the surface to prevent sticking
-                    const pushDistance = 0.01;
+                    const pushDistance = 0.001;
                     camera.position.addScaledVector(normal, pushDistance);
                     camera.position.add(slideVector);
                 }
             } else if (collisionType === "cylinder-top" || collisionType === "cylinder-bottom") {
                 // Cap collision - depends on orientation 
                 const movingAwayFromCollision = moveVector.dot(normal) > 0;
-                
+
                 if (movingAwayFromCollision) {
                     camera.position.add(moveVector);
                 } else {
                     // Treat cap like a flat surface
                     const slideVector = moveVector.clone().projectOnPlane(normal);
-                    
+
                     // Check if this is a top cap that can be stood on
                     // We only want the player to stand on relatively flat surfaces
                     const upDot = normal.dot(new THREE.Vector3(0, 1, 0));
                     if (Math.abs(upDot) > 0.7) { // Cap is mostly horizontal
                         isGrounded = upDot > 0; // Only if normal points up
-                        
+
                         if (isGrounded && jumpRequested.current) {
                             velocity.current.y = jumpStrength;
                             isJumpingRef.current = true;
                             jumpRequested.current = false;
                         }
                     }
-                    
+
                     // Add a small push away from the surface
-                    const pushDistance = 0.01;
+                    const pushDistance = 0.001;
                     camera.position.addScaledVector(normal, pushDistance);
                     camera.position.add(slideVector);
                 }
@@ -595,6 +600,14 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
 
         playerPosition.copy(camera.position)
 
+        const currentTime = performance.now();
+
+        // Only emit the position change every 100ms
+        if (currentTime - lastUpdateTime.current >= 1000) {
+            onPositionChange(playerPosition.clone());
+            lastUpdateTime.current = currentTime; // Update the last update time
+        }
+
         checkCollisions(playerPosition);
     });
 
@@ -606,7 +619,7 @@ const Player: React.FC<PlayerProps> = ({ obstacles, getGroundHeight }) => {
                     key={fireball.id}
                     position={fireball.position}
                     direction={fireball.direction}
-                    obstacles={[]} // Pass obstacle references here
+                    obstacles={obstacles} // Pass obstacle references here
                     onExplode={handleExplosion}
                 />
             ))}
