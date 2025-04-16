@@ -6,7 +6,7 @@ import Explosion from '../explosion/Explosion';
 import * as THREE from 'three';
 
 interface PlayerProps {
-    obstacles: THREE.Mesh[];
+    obstacles: any;
     getGroundHeight: (x: number, z: number) => number;
     onPositionChange: (pos: THREE.Vector3) => void;
 }
@@ -52,8 +52,8 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
             return;
         }
 
-
-        for (const obstacle of obstacles) {
+        console.log(obstacles)
+        for (const obstacle of obstacles!) {
             fireballPosition.distanceTo(obstacle.position)
             if (fireballPosition.distanceTo(obstacle.position) < 5) {
                 console.log("ye");
@@ -619,7 +619,7 @@ const Player: React.FC<PlayerProps> = ({ onPositionChange, obstacles, getGroundH
                     key={fireball.id}
                     position={fireball.position}
                     direction={fireball.direction}
-                    obstacles={obstacles} // Pass obstacle references here
+                    obstacles={obstacles || []} // Pass obstacle references here
                     onExplode={handleExplosion}
                 />
             ))}
