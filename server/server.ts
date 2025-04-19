@@ -39,19 +39,6 @@ app.use(cookieParser());
 //Routes
 app.use("/auth", router);
 
-
-type Player = {
-    socketId: string
-    userId: string
-    eloRating: number
-    socket?: Socket
-}
-
-type Room = {
-    players: Player[],
-    // code: string
-};
-
 type ActiveRooms = {
     [key: string]: Room
 };
@@ -61,130 +48,130 @@ interface Categories {
 }
 
 
-//user match-making algorithm
-class MinHeap<T> {
+// //user match-making algorithm
+// class MinHeap<T> {
 
-    private heap: T[] = [];
-    private compare: (a: T, b: T) => number;
+//     private heap: T[] = [];
+//     private compare: (a: T, b: T) => number;
 
-    constructor(compareFunction: (a: T, b: T) => number) {
-        this.compare = compareFunction;
-    }
+//     constructor(compareFunction: (a: T, b: T) => number) {
+//         this.compare = compareFunction;
+//     }
 
-    private swap(i: number, j: number): void {
-        [this.heap[i], this.heap[j]] = [this.heap[j], this.heap[i]];
-    }
+//     private swap(i: number, j: number): void {
+//         [this.heap[i], this.heap[j]] = [this.heap[j], this.heap[i]];
+//     }
 
-    insert(value: T) {
-        this.heap.push(value);
-        this.bubbleUp(this.heap.length - 1);
-    }
+//     insert(value: T) {
+//         this.heap.push(value);
+//         this.bubbleUp(this.heap.length - 1);
+//     }
 
-    private bubbleUp(index: number): void {
-        while (index > 0) {
-            let parentIndex = Math.floor((index - 1) / 2);
-            if (this.compare(this.heap[index], this.heap[parentIndex]) >= 0) break;
-            this.swap(index, parentIndex);
-            index = parentIndex;
-        }
-    }
+//     private bubbleUp(index: number): void {
+//         while (index > 0) {
+//             let parentIndex = Math.floor((index - 1) / 2);
+//             if (this.compare(this.heap[index], this.heap[parentIndex]) >= 0) break;
+//             this.swap(index, parentIndex);
+//             index = parentIndex;
+//         }
+//     }
 
-    extractMin(): T | null {
-        if (this.heap.length === 0) return null;
-        if (this.heap.length === 1) return this.heap.pop() as T;
+//     extractMin(): T | null {
+//         if (this.heap.length === 0) return null;
+//         if (this.heap.length === 1) return this.heap.pop() as T;
 
-        const min = this.heap[0];
-        this.heap[0] = this.heap.pop() as T;
-        this.bubbleDown(0);
-        return min;
-    }
+//         const min = this.heap[0];
+//         this.heap[0] = this.heap.pop() as T;
+//         this.bubbleDown(0);
+//         return min;
+//     }
 
-    bubbleDown(index: number): void {
-        let smallest = index;
-        let leftChild = 2 * index + 1;
-        let rightChild = 2 * index + 1;
+//     bubbleDown(index: number): void {
+//         let smallest = index;
+//         let leftChild = 2 * index + 1;
+//         let rightChild = 2 * index + 1;
 
-        if (leftChild < this.heap.length && this.compare(this.heap[leftChild], this.heap[smallest]) < 0) {
-            smallest = leftChild;
-        }
+//         if (leftChild < this.heap.length && this.compare(this.heap[leftChild], this.heap[smallest]) < 0) {
+//             smallest = leftChild;
+//         }
 
-        if (rightChild < this.heap.length && this.compare(this.heap[rightChild], this.heap[smallest]) < 0) {
-            smallest = rightChild;
-        }
+//         if (rightChild < this.heap.length && this.compare(this.heap[rightChild], this.heap[smallest]) < 0) {
+//             smallest = rightChild;
+//         }
 
-        if (smallest !== index) {
-            this.swap(index, smallest);
-            this.bubbleDown(smallest);
-        }
-    }
+//         if (smallest !== index) {
+//             this.swap(index, smallest);
+//             this.bubbleDown(smallest);
+//         }
+//     }
 
-    getSize(): number {
-        return this.heap.length;
-    }
-}
+//     getSize(): number {
+//         return this.heap.length;
+//     }
+// }
 
-class MatchMaking {
-    private eloHeaps: Map<number, MinHeap<Player>> = new Map();
+// class MatchMaking {
+//     private eloHeaps: Map<number, MinHeap<Player>> = new Map();
 
-    constructor() { }
+//     constructor() { }
 
-    private getEloRange(elo: number): number {
-        return Math.floor(elo / 100) * 100;
-    }
+//     private getEloRange(elo: number): number {
+//         return Math.floor(elo / 100) * 100;
+//     }
 
-    addPlayer(player: Player) {
-        const range = this.getEloRange(player.eloRating);
+//     addPlayer(player: Player) {
+//         const range = this.getEloRange(player.eloRating);
 
-        if (!this.eloHeaps.has(range)) {
-            this.eloHeaps.set(range, new MinHeap<Player>((a, b) => a.eloRating - b.eloRating))
-        }
+//         if (!this.eloHeaps.has(range)) {
+//             this.eloHeaps.set(range, new MinHeap<Player>((a, b) => a.eloRating - b.eloRating))
+//         }
 
-        this.eloHeaps.get(range)!.insert(player);
-    }
+//         this.eloHeaps.get(range)!.insert(player);
+//     }
 
-    findMatch(player: Player, eloRange = 50): Player | null {
-        const range = this.getEloRange(player.eloRating);
+//     findMatch(player: Player, eloRange = 50): Player | null {
+//         const range = this.getEloRange(player.eloRating);
 
-        let bestMatch: Player | null = null;
+//         let bestMatch: Player | null = null;
 
-        const isValidMatch = (match: Player | null) => match && match.userId !== player.userId; // Ensure different users
+//         const isValidMatch = (match: Player | null) => match && match.userId !== player.userId; // Ensure different users
 
-        // Check the player's range heap first
-        if (this.eloHeaps.has(range)) {
-            bestMatch = this.eloHeaps.get(range)!.extractMin();
-            if (!isValidMatch(bestMatch)) bestMatch = null;
-        }
+//         // Check the player's range heap first
+//         if (this.eloHeaps.has(range)) {
+//             bestMatch = this.eloHeaps.get(range)!.extractMin();
+//             if (!isValidMatch(bestMatch)) bestMatch = null;
+//         }
 
-        // If no match, check adjacent ranges (lower & higher ELO brackets)
-        if (!bestMatch) {
-            if (this.eloHeaps.has(range - 100)) {
-                bestMatch = this.eloHeaps.get(range - 100)!.extractMin();
-                if (!isValidMatch(bestMatch)) bestMatch = null;
-            }
-            if (!bestMatch && this.eloHeaps.has(range + 100)) {
-                bestMatch = this.eloHeaps.get(range + 100)!.extractMin();
-                if (!isValidMatch(bestMatch)) bestMatch = null;
-            }
-        }
+//         // If no match, check adjacent ranges (lower & higher ELO brackets)
+//         if (!bestMatch) {
+//             if (this.eloHeaps.has(range - 100)) {
+//                 bestMatch = this.eloHeaps.get(range - 100)!.extractMin();
+//                 if (!isValidMatch(bestMatch)) bestMatch = null;
+//             }
+//             if (!bestMatch && this.eloHeaps.has(range + 100)) {
+//                 bestMatch = this.eloHeaps.get(range + 100)!.extractMin();
+//                 if (!isValidMatch(bestMatch)) bestMatch = null;
+//             }
+//         }
 
-        // As a last resort, look through all heaps for a valid match
-        if (!bestMatch) {
-            for (const heap of this.eloHeaps.values()) {
-                while (heap.getSize() > 0) {
-                    bestMatch = heap.extractMin();
-                    if (isValidMatch(bestMatch)) break;
-                    bestMatch = null; // If invalid, keep searching
-                }
-                if (bestMatch) break;
-            }
-        }
+//         // As a last resort, look through all heaps for a valid match
+//         if (!bestMatch) {
+//             for (const heap of this.eloHeaps.values()) {
+//                 while (heap.getSize() > 0) {
+//                     bestMatch = heap.extractMin();
+//                     if (isValidMatch(bestMatch)) break;
+//                     bestMatch = null; // If invalid, keep searching
+//                 }
+//                 if (bestMatch) break;
+//             }
+//         }
 
-        return bestMatch;
-    }
-}
+//         return bestMatch;
+//     }
+// }
 
 
-const activeRooms: ActiveRooms = {};
+// const activeRooms: ActiveRooms = {};
 
 
 
@@ -226,13 +213,71 @@ function getRandomPosition(min = -10, max = 10) {
     return { x: rand(), y: 0, z: rand() }; // y is usually 0 for ground level
 }
 
+type Player = {
+    id: string;
+    team: string;
+    position?: Position;
+}
+
+type Room = {
+    id: string;
+    players: Player[];
+    maxPlayers: number;
+    gameStarted: boolean;
+}
+
+const rooms: Room[] = [];
+
+function findOrCreateRoom(userId: string, socketId: string) {
+    let room = rooms.find(r => r.players.length < r.maxPlayers);
+    if (!room) {
+        room = {
+            id: uuidv4(),
+            players: [],
+            maxPlayers: 2,
+            gameStarted: false
+        };
+        rooms.push(room);
+        console.log(`New room created: ${room.id}`);
+    } else {
+        if (userId) {
+            console.log(`User ${JSON.stringify(userId, null, 2)} is joining room: ${room.id}`);
+            console.log(`User ${userId} joined room: ${room.id}`);
+        } else {
+            console.log("User ID is required to join a room.");
+        }
+
+    }
+
+    return room;
+}
+
+
 io.on('connection', (socket: AuthenticatedSocket) => {
 
     console.log('User connected:', socket.id);
 
-    players[socket.id] = getRandomPosition();
-
     socket.emit("currentPlayers", players);
+
+    socket.on("joinRoom", (userId) => {
+        console.log('user has joined room', userId)
+        const room = findOrCreateRoom(userId, socket.id);
+        socket.join(room.id);
+
+        //assign team to player
+        const team = Math.random() < 0.5 ? "red" : "blue";
+
+        const newPlayer: Player = {
+            id: userId,
+            team: team
+        }
+        room.players.push(newPlayer)
+        socket.emit('roomAssigned', { roomId: room.id, team });
+        console.log("players in room: ", room.players)
+
+    })
+
+
 
     socket.broadcast.emit("newPlayer", { id: socket.id, position: players[socket.id] })
 
@@ -301,46 +346,32 @@ io.on('connection', (socket: AuthenticatedSocket) => {
     // })
 })
 
-function findOrCreateRoom(userId: string, socketId: string) {
-
-    console.log(activeRooms)
-
-    const openRoom = Object.keys(activeRooms).find((roomId) => activeRooms[roomId].players.length < 2 && !activeRooms[roomId].players.some(p => p.userId === userId))
-
-    const roomId = openRoom || `room=${uuidv4()}`
-
-    if (!activeRooms[roomId]) {
-        activeRooms[roomId] = { players: [] }
-    }
-
-    activeRooms[roomId].players.push({ userId: userId, socketId: socketId, eloRating: 100 })
-    return roomId;
-}
 
 
-function removePlayer(socketId: string) {
-    for (const roomId in activeRooms) {
 
-        activeRooms[roomId].players = activeRooms[roomId].players.filter(
-            (player) => player.socketId !== socketId
-        );
+// function removePlayer(socketId: string) {
+//     for (const roomId in activeRooms) {
 
-        if (activeRooms[roomId].players.length == 1) {
-            const winner = activeRooms[roomId].players[0];
-            io.to(winner.socketId).emit("gameOver", {
-                winner: winner.userId,
-                message: "Your Opponent has been disconnected. You WIN!"
-            })
+//         activeRooms[roomId].players = activeRooms[roomId].players.filter(
+//             (player) => player.socketId !== socketId
+//         );
 
-            delete activeRooms[roomId];
+//         if (activeRooms[roomId].players.length == 1) {
+//             const winner = activeRooms[roomId].players[0];
+//             io.to(winner.socketId).emit("gameOver", {
+//                 winner: winner.userId,
+//                 message: "Your Opponent has been disconnected. You WIN!"
+//             })
 
-        } else if (activeRooms[roomId].players.length === 0) {
-            delete activeRooms[roomId]; // Cleanup empty rooms
-        }
-    }
-}
+//             delete activeRooms[roomId];
 
-const matchMakingSystem = new MatchMaking();
+//         } else if (activeRooms[roomId].players.length === 0) {
+//             delete activeRooms[roomId]; // Cleanup empty rooms
+//         }
+//     }
+// }
+
+// const matchMakingSystem = new MatchMaking();
 
 
 

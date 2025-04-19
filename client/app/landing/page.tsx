@@ -64,7 +64,61 @@ const CylinderObstacleVerticle = React.forwardRef<THREE.Mesh, ObstacleProps>(({ 
 // Main game component
 const FirstPersonGame: React.FC = () => {
   const obstacles = useRef<THREE.Mesh[]>([]);
-  const [players, setPlayers] = useState<{ [id: string]: THREE.Vector3 }>({});
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [team, setTeam] = useState<string | null>(null);
+
+  type Player = {
+    id: string;
+    team?: string;
+    position?: THREE.Vector3;
+  }
+
+  type Room = {
+    roomId: string;
+    players: Player[];
+    maxPlayers: number;
+    gameStarted: boolean;
+  }
+
+
+  //player connection handling
+  useEffect(() => {
+
+    socket.on("connect", () => {
+      console.log("Connected to server");
+
+      socket.emit("joinRoom", (socket.id));
+
+    });
+
+    socket.on("roomAssigned", ({ roomId, team }) => {
+      console.log(`Assigned to room: ${roomId}: `);
+      setRoomId(roomId);
+      setTeam(team);
+
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
+    });
+
+
+    return () => {
+      socket.off("connect");
+      socket.off("roomAssigned");
+      socket.off("disconnect");
+    };
+
+  }, [])
+
+  //prevent window refresh
+  useEffect(() => {
+    window.addEventListener("beforeunload", () => {});
+
+    return () => {
+      window.removeEventListener("beforeunload", () => {});
+    };
+  }, []);
 
 
 
@@ -107,6 +161,8 @@ const FirstPersonGame: React.FC = () => {
       <div className="absolute top-4 left-4 bg-white text-black p-2 z-10">
         <p>WASD to move, Mouse to look</p>
         <p className="text-sm">Press ESC to release mouse</p>
+        <p>Room Id: {roomId}</p>
+        <p>Team: {team}</p>
       </div>
 
       <Canvas camera={{ position: [0, 1.6, 0], fov: 75 }}>

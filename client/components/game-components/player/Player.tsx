@@ -52,7 +52,6 @@ const Fireball: React.FC<FireballProps> = ({ position, direction, speed = 2, obs
             return;
         }
 
-        console.log(obstacles)
         for (const obstacle of obstacles!) {
             fireballPosition.distanceTo(obstacle.position)
             if (fireballPosition.distanceTo(obstacle.position) < 5) {
